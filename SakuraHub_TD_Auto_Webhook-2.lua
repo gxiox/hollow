@@ -1,0 +1,5232 @@
+--// ============================================================
+--//  SAKURA HUB  |  TD AUTO  (Challenge / Farm / Halloween Event / Shop / Travel)
+--//  วางใน autoexec เพื่อให้รันต่อหลังวาป
+--//  - ธีมอนิเมะโทนอุ่น: ครีม / ทองอำพัน / ชมพูซากุระ
+--//  - พื้นหลังขยับ: กลีบซากุระร่วง + แสงลอย + ภาพพื้นหลัง (ใส่รูปเองได้)
+--//  - มี: Toggle / Slider / Dropdown (เดี่ยว+หลายตัวเลือก) / Button
+--//        TextBox / Keybind / Status / Config + สล็อตเซฟ + Export/Import
+--//  - เพิ่มฟังก์ชันของคุณ: ดูหัวข้อ ">>> ADD YOUR FUNCTIONS <<<"
+--// ============================================================
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local RunService = game:GetService("RunService")
+local StatsService = game:GetService("Stats")
+local SoundService = game:GetService("SoundService")
+local Debris = game:GetService("Debris")
+local GuiService = game:GetService("GuiService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+local GuiParent = PlayerGui
+pcall(function()
+    if gethui then
+        GuiParent = gethui()
+    end
+end)
+
+--==================================================
+-- FONT  (Nunito = กลมๆ น่ารัก; ถ้าโหลดไม่ได้จะใช้ฟอนต์เริ่มต้น)
+--==================================================
+local function MakeFont(weight)
+    local ok, f = pcall(function()
+        return Font.new("rbxasset://fonts/families/Nunito.json", weight, Enum.FontStyle.Normal)
+    end)
+    return ok and f or nil
+end
+local FNT = {
+    R = MakeFont(Enum.FontWeight.Regular),
+    M = MakeFont(Enum.FontWeight.SemiBold),
+    B = MakeFont(Enum.FontWeight.Bold),
+    X = MakeFont(Enum.FontWeight.ExtraBold),
+}
+local function SetFont(obj, f)
+    if f then
+        pcall(function()
+            obj.FontFace = f
+        end)
+    end
+end
+
+-- เสียงตอนกดเปิด/ปิด (เปลี่ยนเป็น "rbxassetid://เลข" ได้)
+local SOUND_ON = "rbxasset://sounds/switch.wav"
+local SOUND_OFF = "rbxasset://sounds/button.wav"
+
+--==================================================
+-- CONFIG  (Auto Save / Auto Load)
+--==================================================
+local CONFIG_FILE = "SakuraHub_Config.json"
+local PROFILE_DIR = "SakuraHub"
+
+local Defaults = {
+    -- สี (ธีมเริ่มต้น: ครีม + ทองอำพัน + ชมพูซากุระ)
+    UIAccentColor = "#EFA53A",
+    UIAccent2Color = "#F4A0B5",
+    UIBackgroundColor = "#FFF6EA",
+    UIButtonColor = "#F7E4CF",
+    -- พื้นหลังขยับ
+    AnimBackground = true,
+    PetalCount = 18,
+    AnimSpeed = 100,
+    PanelAlpha = 22,
+    BgImageId = "",
+    ArtImageId = "",
+    ArtOpacity = 55,
+    -- ฟังก์ชันหลัก
+    AutoChallenge = false,
+    ChallengeTab = "All",
+    AutoLeaveChallenge = true,
+    LeaveDelay = 3,
+    AutoFarm = false,
+    FarmTarget = "",
+    FarmAct = "Act 1",
+    FarmDifficulty = "Normal",
+    -- Event ฮาโลวีน
+    AutoEvent = false,
+    EventPick = "Halloween (Event)",
+    EventDifficulty = "Normal",
+    AutoHalloweenShop = false,
+    HalloweenPick = "Trait Reroll|Stats Reroll All|Stats Reroll|Halloween Capsule",
+    HalloweenLeaveAt = 0,
+    -- ร้านค้า
+    AutoShop = false,
+    ShopLeaveToBuy = true,
+    ShopCoinsAll = false,
+    ShopGemsAll = false,
+    ShopCoinsPick = "Trait",
+    ShopGemsPick = "",
+    -- วาร์ป
+    TravelTarget = "Lobby",
+    JoinLink = "",
+    -- สถานะภายใน (บอทใช้เอง)
+    StateActivity = "",
+    StateShopCycle = 0,
+    StateShopMissing = false,
+    StateChallengeNext = "{}",
+    StateHalBal = 0,
+    -- Webhook
+    WebhookEnabled = false,
+    WebhookUrl = "",
+    WebhookWhat = "ผลแมตช์ (ชนะ/แพ้)|ด่านและความยาก|Unit ในทีม (เลเวล / EXP)|Unit ที่ได้|ไอเท็มที่ได้|Coins / Gems ที่ได้",
+    -- ระบบ
+    SoundEnabled = true,
+    StatsVisible = true,
+    UIScalePercent = 100,
+    ToggleKey = "RightShift",
+    ProfileSlot = "Slot 1",
+    ImportText = "",
+    -- สถานะ UI
+    LastTab = "Home",
+    WindowVisible = true,
+    Maximized = false,
+    CollapsedSections = "",
+    WindowX = 0.5,
+    WindowY = 0.5,
+    FloatX = 0.05,
+    FloatY = 0.25,
+    StatsX = 0.5,
+    StatsY = 0.045,
+}
+
+-- คีย์ที่ไม่เก็บลงสล็อต/ไม่ export (ตำแหน่งหน้าต่าง ฯลฯ)
+local ProfileExclude = {
+    WindowX = true, WindowY = true, FloatX = true, FloatY = true,
+    StatsX = true, StatsY = true, LastTab = true, WindowVisible = true,
+    Maximized = true, CollapsedSections = true, ImportText = true,
+    ProfileSlot = true,
+    StateActivity = true, StateShopCycle = true, StateShopMissing = true,
+    StateChallengeNext = true, StateHalBal = true, JoinLink = true, WebhookUrl = true,
+}
+
+local Config = {}
+for k, v in pairs(Defaults) do
+    Config[k] = v
+end
+
+local LoadedFromFile = false
+
+local function LoadConfig()
+    if not (isfile and readfile) then
+        return
+    end
+    local ok, exists = pcall(isfile, CONFIG_FILE)
+    if not (ok and exists) then
+        return
+    end
+    pcall(function()
+        local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
+        if type(data) == "table" then
+            for k, v in pairs(Defaults) do
+                if type(data[k]) == type(v) then
+                    Config[k] = data[k]
+                end
+            end
+            LoadedFromFile = true
+        end
+    end)
+end
+
+LoadConfig()
+for _, k in ipairs({ "WindowX", "WindowY" }) do
+    Config[k] = math.clamp(Config[k], 0.05, 0.95)
+end
+for _, k in ipairs({ "FloatX", "FloatY", "StatsX", "StatsY" }) do
+    Config[k] = math.clamp(Config[k], 0.02, 0.98)
+end
+Config.UIScalePercent = math.clamp(Config.UIScalePercent, 60, 120)
+
+local SaveHooks = {}
+local SaveToken = 0
+
+local function Fire(state)
+    for _, h in ipairs(SaveHooks) do
+        pcall(h, state)
+    end
+end
+
+local function WriteNow()
+    if not writefile then
+        return "unsupported"
+    end
+    local ok = pcall(function()
+        writefile(CONFIG_FILE, HttpService:JSONEncode(Config))
+    end)
+    return ok and "saved" or "failed"
+end
+
+local function SaveConfig(instant)
+    SaveToken = SaveToken + 1
+    local token = SaveToken
+    Fire("saving")
+    local function commit()
+        if token ~= SaveToken then
+            return
+        end
+        local result = WriteNow()
+        Fire(result)
+        if result == "saved" then
+            task.delay(1.8, function()
+                if token == SaveToken then
+                    Fire("idle")
+                end
+            end)
+        end
+    end
+    if instant then
+        commit()
+    else
+        task.delay(0.3, commit)
+    end
+end
+
+local function SetConfig(key, value)
+    if Config[key] == value then
+        return
+    end
+    Config[key] = value
+    SaveConfig()
+end
+
+--==================================================
+-- THEME  (ทุกสีคำนวณจาก Config และอัปเดตสดทันที)
+--==================================================
+local function RGB(r, g, b)
+    return Color3.fromRGB(r, g, b)
+end
+
+local function Lum(c)
+    return 0.299 * c.R + 0.587 * c.G + 0.114 * c.B
+end
+
+local function Hex(key, fallback)
+    local ok, c = pcall(Color3.fromHex, Config[key])
+    return ok and c or fallback
+end
+
+local Theme = {}
+
+local function ComputeTheme()
+    local bg = Hex("UIBackgroundColor", RGB(255, 246, 234))
+    local dark = Lum(bg) < 0.5
+    local to = dark and Color3.new(1, 1, 1) or Color3.new(0, 0, 0)
+    Theme.Dark = dark
+    Theme.Bg = bg
+    Theme.Surface = dark and bg:Lerp(to, 0.06) or bg:Lerp(Color3.new(1, 1, 1), 0.55)
+    Theme.Surface2 = dark and bg:Lerp(to, 0.11) or bg:Lerp(to, 0.05)
+    Theme.Stroke = bg:Lerp(to, dark and 0.2 or 0.14)
+    Theme.Text = dark and RGB(250, 244, 240) or RGB(74, 52, 44)
+    Theme.Sub = Theme.Text:Lerp(bg, 0.3)
+    Theme.Muted = Theme.Text:Lerp(bg, 0.55)
+    Theme.Accent = Hex("UIAccentColor", RGB(239, 165, 58))
+    Theme.Accent2 = Hex("UIAccent2Color", RGB(244, 160, 181))
+    Theme.OnAccent = Lum(Theme.Accent) > 0.62 and RGB(70, 44, 30) or RGB(255, 255, 255)
+    Theme.Button = Hex("UIButtonColor", RGB(247, 228, 207))
+    Theme.Good = RGB(86, 190, 125)
+    Theme.Warn = RGB(240, 175, 60)
+    Theme.Bad = RGB(232, 90, 110)
+end
+
+ComputeTheme()
+
+local ThemeHooks = {}
+
+local function OnTheme(fn)
+    ThemeHooks[#ThemeHooks + 1] = fn
+    pcall(fn)
+end
+
+local function Bind(obj, prop, key)
+    OnTheme(function()
+        obj[prop] = Theme[key]
+    end)
+end
+
+local function ApplyTheme()
+    ComputeTheme()
+    for _, fn in ipairs(ThemeHooks) do
+        pcall(fn)
+    end
+end
+
+--==================================================
+-- HELPERS
+--==================================================
+local Orders = setmetatable({}, { __mode = "k" })
+local function Next(parent)
+    Orders[parent] = (Orders[parent] or 0) + 1
+    return Orders[parent]
+end
+
+local function New(className, props, parent)
+    local obj = Instance.new(className)
+    for k, v in pairs(props or {}) do
+        obj[k] = v
+    end
+    obj.Parent = parent
+    return obj
+end
+
+local function Corner(parent, radius)
+    return New("UICorner", { CornerRadius = UDim.new(0, radius) }, parent)
+end
+
+local function Stroke(parent, color, thickness, transparency)
+    return New("UIStroke", {
+        Color = color,
+        Thickness = thickness or 1,
+        Transparency = transparency or 0,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+    }, parent)
+end
+
+local function Pad(parent, l, r, t, b)
+    return New("UIPadding", {
+        PaddingLeft = UDim.new(0, l or 0),
+        PaddingRight = UDim.new(0, r or 0),
+        PaddingTop = UDim.new(0, t or 0),
+        PaddingBottom = UDim.new(0, b or 0),
+    }, parent)
+end
+
+local function List(parent, padding)
+    return New("UIListLayout", {
+        Padding = UDim.new(0, padding or 0),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+    }, parent)
+end
+
+local function Text(parent, text, size, font, color, align)
+    local l = New("TextLabel", {
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Text = text or "",
+        TextSize = size or 13,
+        TextXAlignment = align or Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+    }, parent)
+    SetFont(l, font or FNT.R)
+    if type(color) == "string" then
+        Bind(l, "TextColor3", color)
+    elseif color then
+        l.TextColor3 = color
+    end
+    return l
+end
+
+local function Tween(obj, t, props, style, dir)
+    local tw = TweenService:Create(
+        obj,
+        TweenInfo.new(t, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out),
+        props
+    )
+    tw:Play()
+    return tw
+end
+
+local function Apply(obj, animate, props)
+    if animate then
+        Tween(obj, 0.16, props)
+    else
+        for k, v in pairs(props) do
+            obj[k] = v
+        end
+    end
+end
+
+local function PanelAlpha()
+    return math.clamp(Config.PanelAlpha / 100, 0, 0.7)
+end
+
+-- การ์ดกระจกฝ้า (โปร่งตามค่า PanelAlpha เพื่อให้เห็นพื้นหลังขยับ)
+local function Panel(parent, size, class)
+    local f = New(class or "Frame", { BorderSizePixel = 0, LayoutOrder = Next(parent) }, parent)
+    if class == "TextButton" then
+        f.Text = ""
+        f.AutoButtonColor = false
+    end
+    if size then
+        f.Size = size
+    end
+    OnTheme(function()
+        f.BackgroundColor3 = Theme.Surface
+        f.BackgroundTransparency = PanelAlpha()
+    end)
+    Corner(f, 14)
+    Bind(Stroke(f, Theme.Stroke, 1, 0.35), "Color", "Stroke")
+    return f
+end
+
+local function HoverRow(btn)
+    local st = btn:FindFirstChildOfClass("UIStroke")
+    btn.MouseEnter:Connect(function()
+        Tween(btn, 0.12, { BackgroundColor3 = Theme.Surface2 })
+        if st then
+            Tween(st, 0.12, { Transparency = 0.05 })
+        end
+    end)
+    local sc
+    if btn:IsA("GuiButton") then
+        sc = New("UIScale", { Scale = 1 }, btn)
+        btn.MouseButton1Down:Connect(function()
+            Tween(sc, 0.08, { Scale = 0.985 })
+        end)
+        btn.MouseButton1Up:Connect(function()
+            Tween(sc, 0.18, { Scale = 1 }, Enum.EasingStyle.Back)
+        end)
+    end
+    btn.MouseLeave:Connect(function()
+        Tween(btn, 0.12, { BackgroundColor3 = Theme.Surface })
+        if st then
+            Tween(st, 0.12, { Transparency = 0.35 })
+        end
+        if sc then
+            Tween(sc, 0.12, { Scale = 1 })
+        end
+    end)
+end
+
+-- ไล่เฉด Accent -> Accent2 (วัตถุที่ใช้ต้องตั้ง BackgroundColor3 เป็นสีขาว)
+local function AccentGrad(parent, rotation)
+    local g = New("UIGradient", { Rotation = rotation or 0 }, parent)
+    OnTheme(function()
+        g.Color = ColorSequence.new(Theme.Accent, Theme.Accent2)
+    end)
+    return g
+end
+
+local function Tint(parent, radius)
+    local t = New("Frame", {
+        Size = UDim2.fromScale(1, 1),
+        BorderSizePixel = 0,
+        BackgroundColor3 = Color3.new(1, 1, 1),
+    }, parent)
+    Corner(t, radius or 14)
+    local g = AccentGrad(t, 25)
+    g.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.72),
+        NumberSequenceKeypoint.new(1, 0.95),
+    })
+    return t
+end
+
+local function IsPointer(input)
+    return input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch
+end
+
+local function IsMove(input)
+    return input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch
+end
+
+local function AssetUrl(s)
+    s = tostring(s or "")
+    s = string.gsub(s, "^%s+", "")
+    s = string.gsub(s, "%s+$", "")
+    if s == "" then
+        return ""
+    end
+    if string.match(s, "^%d+$") then
+        return "rbxassetid://" .. s
+    end
+    return s
+end
+
+-- ไอคอนวาดด้วย Frame (ไม่พึ่ง asset) คืนฟังก์ชันเปลี่ยนสี
+local function Icon(parent, kind, x, y)
+    local box = New("Frame", {
+        Size = UDim2.fromOffset(18, 18),
+        Position = UDim2.fromOffset(x, y),
+        BackgroundTransparency = 1,
+    }, parent)
+    local parts = {}
+    local function rect(px, py, w, h, r, rot)
+        local f = New("Frame", {
+            Size = UDim2.fromOffset(w, h),
+            Position = UDim2.fromOffset(px, py),
+            BorderSizePixel = 0,
+            Rotation = rot or 0,
+        }, box)
+        Corner(f, r or 1)
+        parts[#parts + 1] = { f = f }
+        return f
+    end
+    local function ring(px, py, s, r, th)
+        local f = New("Frame", {
+            Size = UDim2.fromOffset(s, s),
+            Position = UDim2.fromOffset(px, py),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+        }, box)
+        Corner(f, r)
+        parts[#parts + 1] = { stroke = Stroke(f, Color3.new(1, 1, 1), th or 2, 0) }
+    end
+    if kind == "grid" then
+        rect(1, 1, 7, 7, 3)
+        rect(10, 1, 7, 7, 3)
+        rect(1, 10, 7, 7, 3)
+        rect(10, 10, 7, 7, 3)
+    elseif kind == "sliders" then
+        rect(1, 2, 16, 2, 1)
+        rect(1, 8, 11, 2, 1)
+        rect(1, 14, 14, 2, 1)
+    elseif kind == "close" then
+        rect(1, 8, 16, 2, 1, 45)
+        rect(1, 8, 16, 2, 1, -45)
+    elseif kind == "max" then
+        ring(3, 3, 12, 3)
+    elseif kind == "dots" then
+        rect(1, 1, 8, 8, 4)
+        rect(9, 3, 8, 8, 4)
+        rect(4, 9, 9, 9, 4)
+    elseif kind == "save" then
+        ring(2, 2, 14, 3)
+        rect(5, 2, 8, 5, 1)
+        rect(5, 11, 8, 4, 1)
+    else -- ring (settings)
+        ring(1, 1, 16, 8)
+        rect(7, 7, 4, 4, 2)
+    end
+    return function(c)
+        for _, p in ipairs(parts) do
+            if p.stroke then
+                p.stroke.Color = c
+            else
+                p.f.BackgroundColor3 = c
+            end
+        end
+    end
+end
+
+-- ดอกซากุระวาดด้วย Frame (ใช้เป็นโลโก้ / ปุ่มลอย)
+local function Flower(parent, size)
+    local holder = New("Frame", {
+        Size = UDim2.fromOffset(size, size),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        BackgroundTransparency = 1,
+    }, parent)
+    local pr = size * 0.2
+    local dist = size * 0.27
+    for i = 0, 4 do
+        local a = math.rad(i * 72 - 90)
+        local p = New("Frame", {
+            Size = UDim2.fromOffset(pr * 2, pr * 2),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(0.5, math.cos(a) * dist, 0.5, math.sin(a) * dist),
+            BorderSizePixel = 0,
+            BackgroundColor3 = Color3.new(1, 1, 1),
+            BackgroundTransparency = 0.04,
+        }, holder)
+        Corner(p, 999)
+    end
+    local c = New("Frame", {
+        Size = UDim2.fromOffset(size * 0.22, size * 0.22),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        BorderSizePixel = 0,
+    }, holder)
+    Corner(c, 999)
+    Bind(c, "BackgroundColor3", "Accent")
+    return holder
+end
+
+--==================================================
+-- ROOT GUI
+--==================================================
+pcall(function()
+    for _, root in ipairs({ PlayerGui, GuiParent }) do
+        for _, v in ipairs(root:GetChildren()) do
+            if v.Name == "SAKURA_UI" or v.Name == "SAKURA_Floating" or v.Name == "SAKURA_Stats" then
+                v:Destroy()
+            end
+        end
+    end
+end)
+
+local Screen = New("ScreenGui", {
+    Name = "SAKURA_UI",
+    ResetOnSpawn = false,
+    IgnoreGuiInset = true,
+    DisplayOrder = 999998,
+    ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+}, GuiParent)
+
+-- เก็บ connection ไว้ ตัดทิ้งตอน UI ถูกทำลาย (รันซ้ำได้ไม่ค้าง)
+local Conns = {}
+local function Track(c)
+    Conns[#Conns + 1] = c
+    return c
+end
+Screen.Destroying:Connect(function()
+    for _, c in ipairs(Conns) do
+        pcall(function()
+            c:Disconnect()
+        end)
+    end
+end)
+
+local BW, BH = 780, 560 -- ขนาดออกแบบ (ปรับตามจอผ่าน UIScale)
+local SW = 176 -- ความกว้าง sidebar
+
+local function ViewSize()
+    local s = Screen.AbsoluteSize
+    if s.X > 0 and s.Y > 0 then
+        return s
+    end
+    return workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
+end
+
+local function TargetScale()
+    local v = ViewSize()
+    local fit = math.min(v.X * 0.97 / BW, v.Y * 0.95 / BH)
+    local base = math.min(fit * (Config.Maximized and 1 or 0.92), Config.Maximized and 1.4 or 1.1)
+    local s = base * (Config.UIScalePercent / 100)
+    return math.clamp(s, 0.3, math.max(0.3, fit))
+end
+
+local Main = New("CanvasGroup", {
+    Name = "Main",
+    Size = UDim2.fromOffset(BW, BH),
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(Config.WindowX, Config.WindowY),
+    BorderSizePixel = 0,
+    GroupTransparency = 1,
+    Active = true,
+    Visible = false,
+}, Screen)
+Bind(Main, "BackgroundColor3", "Bg")
+Corner(Main, 22)
+
+--==================================================
+-- ANIMATED BACKGROUND
+--==================================================
+local RefreshBackgroundImages, RefreshPetalCount
+local MAX_PETALS = 40
+do
+-- 1) ไล่เฉดสีพื้นหลังนุ่มๆ
+local Wash = New("Frame", {
+    Size = UDim2.fromScale(1, 1),
+    BorderSizePixel = 0,
+    BackgroundColor3 = Color3.new(1, 1, 1),
+}, Main)
+local WashGrad = New("UIGradient", { Rotation = 60 }, Wash)
+OnTheme(function()
+    WashGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Theme.Accent2:Lerp(Theme.Bg, Theme.Dark and 0.8 or 0.55)),
+        ColorSequenceKeypoint.new(0.5, Theme.Bg),
+        ColorSequenceKeypoint.new(1, Theme.Accent:Lerp(Theme.Bg, Theme.Dark and 0.8 or 0.6)),
+    })
+end)
+TweenService:Create(
+    WashGrad,
+    TweenInfo.new(18, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+    { Rotation = 130 }
+):Play()
+
+-- 2) ภาพพื้นหลังของคุณ (ใส่ใน ตั้งค่า > พื้นหลัง) + ซูมช้าๆ
+local BgHolder = New("Frame", {
+    Size = UDim2.fromScale(1, 1),
+    BackgroundTransparency = 1,
+    ClipsDescendants = true,
+}, Main)
+local BgImage = New("ImageLabel", {
+    Size = UDim2.fromScale(1.12, 1.12),
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.5),
+    BackgroundTransparency = 1,
+    ScaleType = Enum.ScaleType.Crop,
+    ImageTransparency = 0.78,
+    Visible = false,
+}, BgHolder)
+TweenService:Create(
+    BgImage,
+    TweenInfo.new(20, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+    { Position = UDim2.fromScale(0.47, 0.52), Size = UDim2.fromScale(1.2, 1.2) }
+):Play()
+
+-- 3) แสงลอย (orb)
+local OrbLayer = New("Frame", {
+    Size = UDim2.fromScale(1, 1),
+    BackgroundTransparency = 1,
+    ClipsDescendants = true,
+}, Main)
+local OrbDefs = {
+    { size = 340, x = 0.08, y = 0.12, x2 = 0.22, y2 = 0.3, key = "Accent2", t = 11 },
+    { size = 400, x = 0.92, y = 0.85, x2 = 0.75, y2 = 0.65, key = "Accent", t = 14 },
+    { size = 260, x = 0.6, y = 0.1, x2 = 0.45, y2 = 0.25, key = "Accent2", t = 9 },
+}
+for _, d in ipairs(OrbDefs) do
+    local o = New("Frame", {
+        Size = UDim2.fromOffset(d.size, d.size),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(d.x, d.y),
+        BorderSizePixel = 0,
+        BackgroundTransparency = 0.86,
+    }, OrbLayer)
+    Corner(o, 999)
+    Bind(o, "BackgroundColor3", d.key)
+    TweenService:Create(
+        o,
+        TweenInfo.new(d.t, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+        { Position = UDim2.fromScale(d.x2, d.y2), BackgroundTransparency = 0.92 }
+    ):Play()
+end
+
+-- 4) รูปตัวละครของคุณ (มุมขวาล่าง ลอยขึ้นลงเบาๆ)
+local ArtImage = New("ImageLabel", {
+    Size = UDim2.fromOffset(330, 470),
+    AnchorPoint = Vector2.new(1, 1),
+    Position = UDim2.new(1, -6, 1, -6),
+    BackgroundTransparency = 1,
+    ScaleType = Enum.ScaleType.Fit,
+    Visible = false,
+}, Main)
+TweenService:Create(
+    ArtImage,
+    TweenInfo.new(3.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+    { Position = UDim2.new(1, -6, 1, -14) }
+):Play()
+
+RefreshBackgroundImages = function()
+    local bg = AssetUrl(Config.BgImageId)
+    BgImage.Image = bg
+    BgImage.Visible = bg ~= ""
+    local art = AssetUrl(Config.ArtImageId)
+    ArtImage.Image = art
+    ArtImage.Visible = art ~= ""
+    ArtImage.ImageTransparency = 1 - math.clamp(Config.ArtOpacity / 100, 0, 1)
+    OrbLayer.Visible = Config.AnimBackground
+end
+
+-- 5) กลีบซากุระร่วง
+local PetalLayer = New("Frame", {
+    Size = UDim2.fromScale(1, 1),
+    BackgroundTransparency = 1,
+    ClipsDescendants = true,
+}, Main)
+
+local Petals = {}
+for i = 1, MAX_PETALS do
+    local w = math.random(8, 14)
+    local f = New("Frame", {
+        Size = UDim2.fromOffset(w, math.floor(w * 0.66)),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BorderSizePixel = 0,
+        BackgroundTransparency = 0.1 + math.random() * 0.3,
+    }, PetalLayer)
+    Corner(f, 99)
+    local pet = {
+        f = f,
+        x = math.random(),
+        y = math.random() * 1.2 - 0.1,
+        sp = 0.05 + math.random() * 0.07, -- ความเร็วตก (สัดส่วนจอ/วินาที)
+        amp = 0.015 + math.random() * 0.03, -- แกว่งซ้าย-ขวา
+        fr = 0.8 + math.random() * 1.4,
+        ph = math.random() * 6.28,
+        rot = (math.random() - 0.5) * 140,
+        r = math.random() * 360,
+        mix = math.random() * 0.55,
+    }
+    Petals[i] = pet
+    OnTheme(function()
+        f.BackgroundColor3 = Theme.Accent2:Lerp(Color3.new(1, 1, 1), pet.mix)
+    end)
+end
+
+RefreshPetalCount = function()
+    for i, p in ipairs(Petals) do
+        p.f.Visible = Config.AnimBackground and i <= Config.PetalCount
+    end
+end
+
+Track(RunService.Heartbeat:Connect(function(dt)
+    if not Main.Visible or not Config.AnimBackground then
+        return
+    end
+    dt = math.min(dt, 0.1) * (Config.AnimSpeed / 100)
+    for i = 1, math.min(Config.PetalCount, MAX_PETALS) do
+        local p = Petals[i]
+        p.y = p.y + p.sp * dt
+        p.ph = p.ph + p.fr * dt
+        p.r = p.r + p.rot * dt
+        if p.y > 1.08 then
+            p.y = -0.08
+            p.x = math.random()
+        end
+        p.f.Position = UDim2.fromScale(p.x + math.sin(p.ph) * p.amp, p.y)
+        p.f.Rotation = p.r
+    end
+end))
+
+-- 6) ประกายระยิบ
+for i = 1, 9 do
+    local s = New("Frame", {
+        Size = UDim2.fromOffset(4, 4),
+        Position = UDim2.fromScale(math.random(), math.random()),
+        BorderSizePixel = 0,
+        BackgroundTransparency = 1,
+        Rotation = 45,
+    }, OrbLayer)
+    Bind(s, "BackgroundColor3", (i % 2 == 0) and "Accent" or "Accent2")
+    TweenService:Create(
+        s,
+        TweenInfo.new(1.4 + math.random() * 1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true, math.random() * 3),
+        { BackgroundTransparency = 0.1, Size = UDim2.fromOffset(7, 7) }
+    ):Play()
+end
+
+end
+
+-- ขอบหน้าต่างไล่สีหมุน
+local MainStroke = Stroke(Main, Color3.new(1, 1, 1), 1.6, 0)
+local MainGrad = New("UIGradient", { Rotation = 0 }, MainStroke)
+OnTheme(function()
+    MainGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Theme.Stroke),
+        ColorSequenceKeypoint.new(0.35, Theme.Accent),
+        ColorSequenceKeypoint.new(0.65, Theme.Accent2),
+        ColorSequenceKeypoint.new(1, Theme.Stroke),
+    })
+end)
+TweenService:Create(
+    MainGrad,
+    TweenInfo.new(7, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, -1),
+    { Rotation = 360 }
+):Play()
+local MainScale = New("UIScale", { Scale = TargetScale() }, Main)
+
+do
+-- เงาใต้หน้าต่าง
+local Shadow = New("Frame", {
+    Size = UDim2.fromOffset(BW, BH),
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    BackgroundTransparency = 1,
+    ZIndex = 0,
+    Visible = false,
+}, Screen)
+local ShadowScale = New("UIScale", { Scale = 1 }, Shadow)
+local ShadowLayers = {}
+for i, g in ipairs({ 8, 20, 36 }) do
+    local l = New("Frame", {
+        Size = UDim2.new(1, g * 2, 1, g * 2),
+        Position = UDim2.fromOffset(-g, -g + 10),
+        BorderSizePixel = 0,
+        BackgroundColor3 = Color3.fromRGB(80, 40, 30),
+    }, Shadow)
+    Corner(l, 22 + g)
+    ShadowLayers[i] = { f = l, base = 0.88 + i * 0.03 }
+end
+
+Track(RunService.RenderStepped:Connect(function()
+    local vis = Main.Visible
+    Shadow.Visible = vis
+    if not vis then
+        return
+    end
+    Shadow.Position = Main.Position
+    Shadow.Size = Main.Size
+    ShadowScale.Scale = MainScale.Scale
+    local a = Main.GroupTransparency
+    for _, l in ipairs(ShadowLayers) do
+        l.f.BackgroundTransparency = 1 - (1 - l.base) * (1 - a)
+    end
+end))
+
+end
+
+local Opening = false
+
+local function ApplyScale(animate)
+    if Opening then
+        return
+    end
+    if animate and Main.Visible then
+        Tween(MainScale, 0.25, { Scale = TargetScale() }, Enum.EasingStyle.Quint)
+    else
+        MainScale.Scale = TargetScale()
+    end
+end
+
+Track(Screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+    ApplyScale(false)
+end))
+
+--==================================================
+-- SOUND / FX
+--==================================================
+local function PlayToggleSound(on, big)
+    if not Config.SoundEnabled then
+        return
+    end
+    pcall(function()
+        local s = Instance.new("Sound")
+        s.SoundId = on and SOUND_ON or SOUND_OFF
+        s.Volume = big and 0.6 or 0.5
+        s.PlaybackSpeed = (on and 1.2 or 0.88) * (big and 0.9 or 1)
+        s.Parent = SoundService
+        s:Play()
+        Debris:AddItem(s, 2.5)
+    end)
+end
+
+local function FloatCenter()
+    local s = Screen.AbsoluteSize
+    return s.X * Config.FloatX, s.Y * Config.FloatY
+end
+
+local function FxRing(cx, cy, size, thick, dur, color)
+    local r = New("Frame", {
+        Size = UDim2.fromOffset(6, 6),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromOffset(cx, cy),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = 60,
+    }, Screen)
+    Corner(r, 9999)
+    local st = Stroke(r, color or Theme.Accent2, thick, 0.05)
+    Tween(r, dur, { Size = UDim2.fromOffset(size, size) }, Enum.EasingStyle.Quint)
+    Tween(st, dur, { Transparency = 1, Thickness = 0.5 })
+    Debris:AddItem(r, dur + 0.15)
+end
+
+-- กลีบซากุระพุ่งออก
+local function FxPetals(cx, cy, count, dist)
+    for i = 1, count do
+        local ang = math.random() * math.pi * 2
+        local d = dist * (0.5 + math.random() * 0.9)
+        local w = math.random(7, 13)
+        local p = New("Frame", {
+            Size = UDim2.fromOffset(w, math.floor(w * 0.66)),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromOffset(cx, cy),
+            BorderSizePixel = 0,
+            BackgroundColor3 = (i % 3 == 0) and Color3.new(1, 1, 1)
+                or Theme.Accent2:Lerp(Color3.new(1, 1, 1), math.random() * 0.5),
+            Rotation = math.random(0, 360),
+            ZIndex = 61,
+        }, Screen)
+        Corner(p, 99)
+        local dur = 0.6 + math.random() * 0.6
+        Tween(p, dur, {
+            Position = UDim2.fromOffset(cx + math.cos(ang) * d, cy + math.sin(ang) * d * 0.85 + 22),
+            BackgroundTransparency = 1,
+            Rotation = p.Rotation + math.random(-220, 220),
+        }, Enum.EasingStyle.Quint)
+        Debris:AddItem(p, dur + 0.15)
+    end
+end
+
+local AnimToken = 0
+
+-- เปิด: บินออกจากปุ่มดอกไม้ แล้วขยายเป็นหน้าต่าง
+local function PlayOpen()
+    AnimToken = AnimToken + 1
+    local token = AnimToken
+    Opening = true
+    local t = TargetScale()
+    local fx, fy = FloatCenter()
+
+    MainStroke.Thickness = 1.6
+    Main.Size = UDim2.fromOffset(BW, BH)
+    Main.Position = UDim2.fromOffset(fx, fy)
+    Main.GroupTransparency = 1
+    MainScale.Scale = t * 0.1
+    Main.Visible = true
+
+    PlayToggleSound(true, true)
+    FxRing(fx, fy, 120, 3, 0.55)
+    FxPetals(fx, fy, 14, 80)
+
+    Tween(Main, 0.3, { GroupTransparency = 0 })
+    Tween(Main, 0.6, { Position = UDim2.fromScale(Config.WindowX, Config.WindowY) }, Enum.EasingStyle.Quint)
+    Tween(MainScale, 0.65, { Scale = t }, Enum.EasingStyle.Back)
+
+    task.delay(0.68, function()
+        if token == AnimToken then
+            Opening = false
+        end
+    end)
+end
+
+-- ปิด: หดกลับเข้าปุ่มดอกไม้ พร้อมกลีบพุ่งออก
+local function PlayClose()
+    AnimToken = AnimToken + 1
+    local token = AnimToken
+    Opening = true
+    PlayToggleSound(false, true)
+
+    local s0 = MainScale.Scale
+    local fx, fy = FloatCenter()
+    local ap, asz = Main.AbsolutePosition, Main.AbsoluteSize
+    FxPetals(ap.X + asz.X / 2, ap.Y + asz.Y / 2, 18, 170 * math.max(s0, 0.6))
+
+    Tween(Main, 0.45, { Position = UDim2.fromOffset(fx, fy) }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+    Tween(MainScale, 0.45, { Scale = s0 * 0.08 }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+    Tween(Main, 0.4, { GroupTransparency = 1 }, Enum.EasingStyle.Sine, Enum.EasingDirection.In)
+
+    task.delay(0.47, function()
+        if token ~= AnimToken then
+            return
+        end
+        Main.Visible = false
+        Main.Position = UDim2.fromScale(Config.WindowX, Config.WindowY)
+        MainScale.Scale = s0
+        FxRing(fx, fy, 100, 3, 0.5)
+        FxPetals(fx, fy, 8, 50)
+        Opening = false
+    end)
+end
+
+local function SetWindow(visible)
+    SetConfig("WindowVisible", visible)
+    if visible then
+        PlayOpen()
+    else
+        PlayClose()
+    end
+end
+
+-- ลากหน้าต่าง/ปุ่ม/วิดเจ็ต แล้วเซฟตำแหน่งเป็นสัดส่วนหน้าจอ
+local function SavePosition(target, kx, ky)
+    local s = Screen.AbsoluteSize
+    if s.X <= 0 or s.Y <= 0 then
+        return
+    end
+    local c = target.AbsolutePosition + target.AbsoluteSize / 2
+    local fx = math.clamp(c.X / s.X, 0.02, 0.98)
+    local fy = math.clamp(c.Y / s.Y, 0.02, 0.98)
+    target.Position = UDim2.fromScale(fx, fy)
+    SetConfig(kx, math.floor(fx * 10000) / 10000)
+    SetConfig(ky, math.floor(fy * 10000) / 10000)
+end
+
+local function MakeDraggable(handle, target, kx, ky, onClick)
+    local dragging, dragInput, startPos, startCenter, moved = false, nil, nil, nil, false
+
+    handle.InputBegan:Connect(function(input)
+        if IsPointer(input) then
+            dragging = true
+            moved = false
+            dragInput = input
+            startPos = input.Position
+            startCenter = target.AbsolutePosition + target.AbsoluteSize / 2
+        end
+    end)
+
+    Track(UIS.InputChanged:Connect(function(input)
+        if not dragging or not IsMove(input) then
+            return
+        end
+        if input.UserInputType == Enum.UserInputType.Touch and input ~= dragInput then
+            return
+        end
+        local d = input.Position - startPos
+        if d.Magnitude > 8 then
+            moved = true
+        end
+        if moved then
+            local s = Screen.AbsoluteSize
+            target.Position = UDim2.fromOffset(
+                math.clamp(startCenter.X + d.X, 0, s.X),
+                math.clamp(startCenter.Y + d.Y, 0, s.Y)
+            )
+        end
+    end))
+
+    Track(UIS.InputEnded:Connect(function(input)
+        if dragging and IsPointer(input) then
+            if input.UserInputType == Enum.UserInputType.Touch and input ~= dragInput then
+                return
+            end
+            dragging = false
+            if moved then
+                SavePosition(target, kx, ky)
+            elseif onClick then
+                onClick()
+            end
+        end
+    end))
+end
+
+-- แจ้งเตือนเล็กๆ ด้านล่างจอ (Toast)
+local ActiveToast
+local function Toast(text, on)
+    if ActiveToast then
+        ActiveToast:Destroy()
+        ActiveToast = nil
+    end
+    local t = New("TextLabel", {
+        Size = UDim2.fromOffset(0, 38),
+        AutomaticSize = Enum.AutomaticSize.X,
+        AnchorPoint = Vector2.new(0.5, 1),
+        Position = UDim2.new(0.5, 0, 1, 48),
+        BorderSizePixel = 0,
+        Text = text,
+        TextSize = 13,
+        BackgroundColor3 = Theme.Surface,
+        TextColor3 = Theme.Text,
+        ZIndex = 300,
+    }, Screen)
+    SetFont(t, FNT.M)
+    Corner(t, 19)
+    Stroke(t, Theme.Accent, 1.2, 0.3)
+    Pad(t, 38, 18, 0, 0)
+    local dot = New("Frame", {
+        Size = UDim2.fromOffset(9, 9),
+        Position = UDim2.new(0, -24, 0.5, -4),
+        BorderSizePixel = 0,
+        BackgroundColor3 = (on == true) and Theme.Good or (on == false and Theme.Muted or Theme.Accent2),
+    }, t)
+    Corner(dot, 5)
+    ActiveToast = t
+    Tween(t, 0.35, { Position = UDim2.new(0.5, 0, 1, -26) }, Enum.EasingStyle.Back)
+    task.delay(1.8, function()
+        if ActiveToast == t then
+            Tween(t, 0.25, { Position = UDim2.new(0.5, 0, 1, 48) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+            task.delay(0.3, function()
+                t:Destroy()
+                if ActiveToast == t then
+                    ActiveToast = nil
+                end
+            end)
+        end
+    end)
+end
+
+--==================================================
+-- STATUS: save pill + status dot
+--==================================================
+local SaveStates = {
+    idle = { "Auto Save", nil },
+    saving = { "กำลังบันทึก...", "Warn" },
+    saved = { "บันทึกแล้ว", "Good" },
+    failed = { "บันทึกไม่ได้", "Bad" },
+    unsupported = { "ไม่รองรับไฟล์", "Bad" },
+}
+
+local function StatusPill(parent, width)
+    local pill = New("Frame", { Size = UDim2.fromOffset(width or 112, 28), BorderSizePixel = 0 }, parent)
+    Bind(pill, "BackgroundColor3", "Surface2")
+    Corner(pill, 14)
+    Bind(Stroke(pill, Theme.Stroke, 1, 0.3), "Color", "Stroke")
+
+    local dot = New("Frame", {
+        Size = UDim2.fromOffset(8, 8),
+        Position = UDim2.new(0, 12, 0.5, -4),
+        BorderSizePixel = 0,
+    }, pill)
+    Corner(dot, 4)
+
+    local label = Text(pill, "", 11, FNT.M, "Sub")
+    label.Position = UDim2.fromOffset(27, 0)
+    label.Size = UDim2.new(1, -31, 1, 0)
+
+    local current = "idle"
+    local function render()
+        local s = SaveStates[current]
+        label.Text = s[1]
+        dot.BackgroundColor3 = s[2] and Theme[s[2]] or Theme.Accent
+    end
+    OnTheme(render)
+
+    SaveHooks[#SaveHooks + 1] = function(state)
+        current = state
+        render()
+    end
+    return pill
+end
+
+--==================================================
+-- FPS / MS WIDGET (เล็ก ลากได้)
+--==================================================
+local StatsGui = New("ScreenGui", {
+    Name = "SAKURA_Stats",
+    ResetOnSpawn = false,
+    DisplayOrder = 999999,
+    IgnoreGuiInset = true,
+    Enabled = Config.StatsVisible,
+}, GuiParent)
+
+local StatsBox = New("Frame", {
+    Size = UDim2.fromOffset(158, 32),
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(Config.StatsX, Config.StatsY),
+    BorderSizePixel = 0,
+    BackgroundTransparency = 0.08,
+    Active = true,
+}, StatsGui)
+Bind(StatsBox, "BackgroundColor3", "Surface")
+Corner(StatsBox, 16)
+Bind(Stroke(StatsBox, Theme.Stroke, 1.2, 0.1), "Color", "Accent")
+
+local FpsLabel = Text(StatsBox, "", 12, FNT.M, "Sub", Enum.TextXAlignment.Center)
+FpsLabel.RichText = true
+FpsLabel.Size = UDim2.new(0.5, -1, 1, 0)
+
+local MsLabel = Text(StatsBox, "", 12, FNT.M, "Sub", Enum.TextXAlignment.Center)
+MsLabel.RichText = true
+MsLabel.Position = UDim2.new(0.5, 1, 0, 0)
+MsLabel.Size = UDim2.new(0.5, -1, 1, 0)
+
+local StatsDivider = New("Frame", {
+    Size = UDim2.fromOffset(1, 14),
+    Position = UDim2.new(0.5, 0, 0.5, -7),
+    BorderSizePixel = 0,
+}, StatsBox)
+Bind(StatsDivider, "BackgroundColor3", "Stroke")
+
+MakeDraggable(StatsBox, StatsBox, "StatsX", "StatsY")
+
+local Metrics = { fps = 60, ping = 0 }
+
+do
+    local frames, acc = 0, 0
+    Track(RunService.RenderStepped:Connect(function(dt)
+        frames = frames + 1
+        acc = acc + dt
+        if acc >= 0.5 then
+            Metrics.fps = math.floor(frames / acc + 0.5)
+            frames, acc = 0, 0
+        end
+    end))
+end
+
+local function GetPing()
+    local ok, v = pcall(function()
+        return StatsService.Network.ServerStatsItem["Data Ping"]:GetValue()
+    end)
+    return (ok and type(v) == "number") and math.floor(v + 0.5) or 0
+end
+
+local function Level(value, good, mid, higherIsBetter)
+    if higherIsBetter then
+        return value >= good and Theme.Good or (value >= mid and Theme.Warn or Theme.Bad)
+    end
+    return value <= good and Theme.Good or (value <= mid and Theme.Warn or Theme.Bad)
+end
+
+local function RefreshStats()
+    Metrics.ping = GetPing()
+    local fc = Level(Metrics.fps, 50, 30, true)
+    local mc = Level(Metrics.ping, 80, 160, false)
+    local muted = "#" .. Theme.Muted:ToHex()
+    FpsLabel.Text = string.format(
+        '<font color="#%s"><b>%d</b></font> <font color="%s">FPS</font>',
+        fc:ToHex(), Metrics.fps, muted
+    )
+    MsLabel.Text = string.format(
+        '<font color="#%s"><b>%d</b></font> <font color="%s">MS</font>',
+        mc:ToHex(), Metrics.ping, muted
+    )
+end
+
+--==================================================
+-- TOP BAR
+--==================================================
+local BrandSub
+do
+local Top = New("Frame", {
+    Size = UDim2.new(1, 0, 0, 62),
+    BackgroundTransparency = 1,
+    BorderSizePixel = 0,
+}, Main)
+
+local TopLine = New("Frame", {
+    Size = UDim2.new(1, -28, 0, 1),
+    Position = UDim2.new(0, 14, 1, -1),
+    BorderSizePixel = 0,
+    BackgroundColor3 = Color3.new(1, 1, 1),
+}, Top)
+do
+    local g = AccentGrad(TopLine, 0)
+    g.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.9),
+        NumberSequenceKeypoint.new(0.5, 0.2),
+        NumberSequenceKeypoint.new(1, 0.9),
+    })
+end
+
+local Badge = New("Frame", {
+    Size = UDim2.fromOffset(38, 38),
+    Position = UDim2.fromOffset(16, 12),
+    BorderSizePixel = 0,
+    BackgroundColor3 = Color3.new(1, 1, 1),
+}, Top)
+AccentGrad(Badge, 45)
+Corner(Badge, 19)
+Bind(Stroke(Badge, Theme.Accent, 1.5, 0.5), "Color", "Accent")
+local BadgeFlower = Flower(Badge, 30)
+TweenService:Create(
+    BadgeFlower,
+    TweenInfo.new(12, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, -1),
+    { Rotation = 360 }
+):Play()
+
+local Brand = Text(Top, "", 17, FNT.X, "Text")
+Brand.RichText = true
+OnTheme(function()
+    Brand.Text = 'SAKURA <font color="#' .. Theme.Accent:ToHex() .. '">HUB</font>'
+end)
+Brand.Position = UDim2.fromOffset(64, 9)
+Brand.Size = UDim2.new(1, -330, 0, 24)
+
+BrandSub = Text(Top, tostring(game.Name or ""), 11, FNT.R, "Muted")
+BrandSub.Position = UDim2.fromOffset(64, 33)
+BrandSub.Size = UDim2.new(1, -330, 0, 16)
+
+local TopPill = StatusPill(Top, 116)
+TopPill.AnchorPoint = Vector2.new(1, 0.5)
+TopPill.Position = UDim2.new(1, -96, 0.5, 0)
+
+local function WindowButton(kind, xOffset, danger)
+    local b = New("TextButton", {
+        Size = UDim2.fromOffset(32, 32),
+        Position = UDim2.new(1, xOffset, 0.5, -16),
+        BorderSizePixel = 0,
+        Text = "",
+        AutoButtonColor = false,
+    }, Top)
+    Corner(b, 16)
+    Bind(b, "BackgroundColor3", "Surface2")
+    local paint = Icon(b, kind, 7, 7)
+    OnTheme(function()
+        paint(Theme.Sub)
+    end)
+    b.MouseEnter:Connect(function()
+        Tween(b, 0.12, { BackgroundColor3 = danger and Theme.Bad or Theme.Button })
+        paint(danger and Color3.new(1, 1, 1) or Theme.Text)
+    end)
+    b.MouseLeave:Connect(function()
+        Tween(b, 0.12, { BackgroundColor3 = Theme.Surface2 })
+        paint(Theme.Sub)
+    end)
+    return b
+end
+
+local MaxBtn = WindowButton("max", -78, false)
+local CloseBtn = WindowButton("close", -42, true)
+CloseBtn.MouseButton1Click:Connect(function()
+    SetWindow(false)
+end)
+
+MakeDraggable(Top, Main, "WindowX", "WindowY")
+
+MaxBtn.MouseButton1Click:Connect(function()
+    SetConfig("Maximized", not Config.Maximized)
+    SetConfig("WindowX", 0.5)
+    SetConfig("WindowY", 0.5)
+    Tween(Main, 0.3, { Position = UDim2.fromScale(0.5, 0.5) }, Enum.EasingStyle.Quint)
+    ApplyScale(true)
+end)
+
+end
+
+--==================================================
+-- SIDEBAR
+--==================================================
+local Rail = New("Frame", {
+    Size = UDim2.new(0, SW, 1, -82),
+    Position = UDim2.fromOffset(12, 70),
+    BorderSizePixel = 0,
+}, Main)
+OnTheme(function()
+    Rail.BackgroundColor3 = Theme.Surface
+    Rail.BackgroundTransparency = math.clamp(PanelAlpha() + 0.05, 0, 0.75)
+end)
+Corner(Rail, 16)
+Bind(Stroke(Rail, Theme.Stroke, 1, 0.35), "Color", "Stroke")
+
+local CatList = New("ScrollingFrame", {
+    Size = UDim2.new(1, -16, 1, -84),
+    Position = UDim2.fromOffset(8, 10),
+    BackgroundTransparency = 1,
+    BorderSizePixel = 0,
+    ScrollBarThickness = 2,
+    ScrollBarImageTransparency = 0.3,
+    CanvasSize = UDim2.new(),
+    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+    ScrollingDirection = Enum.ScrollingDirection.Y,
+    ElasticBehavior = Enum.ElasticBehavior.Never,
+}, Rail)
+Bind(CatList, "ScrollBarImageColor3", "Accent")
+List(CatList, 4)
+Pad(CatList, 0, 4, 1, 1)
+
+local UserBox = New("Frame", {
+    Size = UDim2.new(1, -16, 0, 54),
+    Position = UDim2.new(0, 8, 1, -62),
+    BorderSizePixel = 0,
+}, Rail)
+Bind(UserBox, "BackgroundColor3", "Surface2")
+Corner(UserBox, 14)
+
+local Avatar = New("ImageLabel", {
+    Size = UDim2.fromOffset(36, 36),
+    Position = UDim2.new(0, 9, 0.5, -18),
+    BorderSizePixel = 0,
+    Image = "rbxthumb://type=AvatarHeadShot&id=" .. LocalPlayer.UserId .. "&w=60&h=60",
+}, UserBox)
+Corner(Avatar, 18)
+Bind(Avatar, "BackgroundColor3", "Button")
+Bind(Stroke(Avatar, Theme.Accent, 2, 0.1), "Color", "Accent")
+Bind(Stroke(UserBox, Theme.Stroke, 1, 0.5), "Color", "Stroke")
+local Online = New("Frame", {
+    Size = UDim2.fromOffset(11, 11),
+    Position = UDim2.new(0, 38, 0.5, 8),
+    BorderSizePixel = 0,
+    ZIndex = 3,
+}, UserBox)
+Corner(Online, 6)
+Bind(Online, "BackgroundColor3", "Good")
+Bind(Stroke(Online, Theme.Surface2, 2, 0), "Color", "Surface2")
+
+local UName = Text(UserBox, LocalPlayer.DisplayName, 13, FNT.B, "Text")
+UName.Position = UDim2.fromOffset(54, 10)
+UName.Size = UDim2.new(1, -60, 0, 18)
+local UTag = Text(UserBox, "@" .. LocalPlayer.Name, 11, FNT.R, "Muted")
+UTag.Position = UDim2.fromOffset(54, 28)
+UTag.Size = UDim2.new(1, -60, 0, 14)
+
+local Pages = {}
+local TabList = {}
+
+local function CatGroup(name)
+    local l = Text(CatList, name, 11, FNT.B, "Muted")
+    l.Size = UDim2.new(1, 0, 0, 26)
+    l.LayoutOrder = Next(CatList)
+    Pad(l, 10, 0, 6, 0)
+    return l
+end
+
+local CurrentTab = nil
+local function SelectTab(id)
+    if not Pages[id] then
+        id = "Home"
+    end
+    SetConfig("LastTab", id)
+    local changed = id ~= CurrentTab
+    CurrentTab = id
+    for pid, page in pairs(Pages) do
+        page.Visible = (pid == id)
+    end
+    if changed then
+        local p = Pages[id]
+        p.Position = UDim2.fromOffset(0, 16)
+        Tween(p, 0.32, { Position = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Quint)
+    end
+    for _, t in ipairs(TabList) do
+        t.active = (t.id == id)
+        t.paint()
+    end
+end
+
+local function Category(name, id, iconKind)
+    local b = New("TextButton", {
+        Size = UDim2.new(1, 0, 0, 42),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Text = "",
+        AutoButtonColor = false,
+        LayoutOrder = Next(CatList),
+    }, CatList)
+    Corner(b, 21)
+    local bst = Stroke(b, Theme.Accent, 1, 1)
+
+    local ind = New("Frame", {
+        Size = UDim2.fromOffset(3, 8),
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, 5, 0.5, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+    }, b)
+    Corner(ind, 2)
+
+    local setIcon = Icon(b, iconKind, 17, 12)
+
+    local lbl = Text(b, name, 14, FNT.M)
+    lbl.Position = UDim2.fromOffset(46, 0)
+    lbl.Size = UDim2.new(1, -50, 1, 0)
+    lbl.TextColor3 = Theme.Sub
+
+    local tab = { id = id, active = false, hover = false }
+    function tab.paint()
+        Tween(b, 0.15, {
+            BackgroundColor3 = tab.active and Theme.Accent or Theme.Button,
+            BackgroundTransparency = tab.active and 0.78 or (tab.hover and 0.5 or 1),
+        })
+        Tween(bst, 0.15, { Color = Theme.Accent, Transparency = tab.active and 0.4 or 1 })
+        Tween(lbl, 0.15, { TextColor3 = tab.active and Theme.Text or Theme.Sub })
+        Tween(ind, 0.15, {
+            BackgroundColor3 = Theme.Accent,
+            BackgroundTransparency = tab.active and 0 or 1,
+            Size = tab.active and UDim2.fromOffset(3, 22) or UDim2.fromOffset(3, 8),
+        })
+        setIcon(tab.active and Theme.Accent or Theme.Sub)
+    end
+    TabList[#TabList + 1] = tab
+    OnTheme(tab.paint)
+
+    b.MouseEnter:Connect(function()
+        tab.hover = true
+        tab.paint()
+    end)
+    b.MouseLeave:Connect(function()
+        tab.hover = false
+        tab.paint()
+    end)
+    b.MouseButton1Click:Connect(function()
+        SelectTab(id)
+    end)
+    return b
+end
+
+--==================================================
+-- PAGES
+--==================================================
+local Body = New("Frame", {
+    Size = UDim2.new(1, -(SW + 38), 1, -82),
+    Position = UDim2.fromOffset(SW + 26, 70),
+    BackgroundTransparency = 1,
+}, Main)
+
+local function MakePage(id, title, subtitle)
+    local page = New("ScrollingFrame", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 3,
+        CanvasSize = UDim2.new(),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        Visible = false,
+    }, Body)
+    Bind(page, "ScrollBarImageColor3", "Accent")
+    List(page, 8)
+    Pad(page, 0, 8, 0, 14)
+
+    local head = New("Frame", {
+        Size = UDim2.new(1, 0, 0, 62),
+        BackgroundTransparency = 1,
+        LayoutOrder = Next(page),
+    }, page)
+    local t = Text(head, title, 24, FNT.X, "Text")
+    t.Size = UDim2.new(1, 0, 0, 30)
+    local s = Text(head, subtitle or "", 12, FNT.R, "Muted")
+    s.Position = UDim2.fromOffset(0, 31)
+    s.Size = UDim2.new(1, 0, 0, 18)
+    local hb = New("Frame", {
+        Size = UDim2.fromOffset(44, 4),
+        Position = UDim2.fromOffset(0, 54),
+        BorderSizePixel = 0,
+        BackgroundColor3 = Color3.new(1, 1, 1),
+    }, head)
+    Corner(hb, 2)
+    AccentGrad(hb, 0)
+
+    Pages[id] = page
+    return page
+end
+
+-- Section แบบพับ/ขยายได้ (จำสถานะใน Config)
+local Collapsed = {}
+for id in string.gmatch(Config.CollapsedSections, "[^|]+") do
+    Collapsed[id] = true
+end
+local function SaveCollapsed()
+    local t = {}
+    for id, v in pairs(Collapsed) do
+        if v then
+            t[#t + 1] = id
+        end
+    end
+    table.sort(t)
+    SetConfig("CollapsedSections", table.concat(t, "|"))
+end
+
+local SectionsByPage = {}
+local CurrentSection = nil
+
+local function Section(page, title)
+    local hdr = New("TextButton", {
+        Size = UDim2.new(1, 0, 0, 38),
+        BackgroundTransparency = 1,
+        Text = "",
+        AutoButtonColor = false,
+        LayoutOrder = Next(page),
+    }, page)
+
+    local bar = New("Frame", {
+        Size = UDim2.fromOffset(4, 16),
+        Position = UDim2.new(0, 2, 0.5, -8),
+        BorderSizePixel = 0,
+        BackgroundColor3 = Color3.new(1, 1, 1),
+    }, hdr)
+    Corner(bar, 2)
+    AccentGrad(bar, 90)
+
+    local hl = New("Frame", {
+        Size = UDim2.new(1, -4, 0, 1),
+        Position = UDim2.new(0, 2, 1, -1),
+        BorderSizePixel = 0,
+    }, hdr)
+    Bind(hl, "BackgroundColor3", "Stroke")
+    New("UIGradient", {
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.2),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+    }, hl)
+
+    local label = Text(hdr, title, 14, FNT.B, "Text")
+    label.Position = UDim2.fromOffset(16, 0)
+    label.Size = UDim2.new(1, -46, 1, 0)
+
+    local chev = New("Frame", {
+        Size = UDim2.fromOffset(14, 14),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(1, -18, 0.5, 0),
+        BackgroundTransparency = 1,
+    }, hdr)
+    local c1 = New("Frame", {
+        Size = UDim2.fromOffset(8, 2), Position = UDim2.fromOffset(1, 6), Rotation = 45, BorderSizePixel = 0,
+    }, chev)
+    local c2 = New("Frame", {
+        Size = UDim2.fromOffset(8, 2), Position = UDim2.fromOffset(6, 6), Rotation = -45, BorderSizePixel = 0,
+    }, chev)
+    Corner(c1, 1)
+    Corner(c2, 1)
+    OnTheme(function()
+        c1.BackgroundColor3 = Theme.Muted
+        c2.BackgroundColor3 = Theme.Muted
+    end)
+
+    local sec = { label = hdr, items = {}, collapsed = Collapsed[title] == true }
+    function sec.refresh(animate)
+        for _, it in ipairs(sec.items) do
+            it.frame.Visible = not sec.collapsed
+        end
+        local rot = sec.collapsed and -90 or 0
+        if animate then
+            Tween(chev, 0.18, { Rotation = rot })
+        else
+            chev.Rotation = rot
+        end
+    end
+    sec.refresh(false)
+
+    hdr.MouseButton1Click:Connect(function()
+        sec.collapsed = not sec.collapsed
+        Collapsed[title] = sec.collapsed
+        SaveCollapsed()
+        sec.refresh(true)
+    end)
+
+    CurrentSection = sec
+    SectionsByPage[page] = SectionsByPage[page] or {}
+    table.insert(SectionsByPage[page], sec)
+    return sec
+end
+
+local function Register(row)
+    local sec = CurrentSection
+    if sec then
+        table.insert(sec.items, { frame = row })
+        sec.refresh(false)
+    end
+end
+
+local Refreshers = {}
+
+--==================================================
+-- COMPONENTS
+--==================================================
+local UpdateSummary = function() end
+
+-- ---------- Toggle ----------
+local function Toggle(page, opts)
+    local row = Panel(page, UDim2.new(1, 0, 0, 66), "TextButton")
+    HoverRow(row)
+    Register(row)
+    local rowStroke = row:FindFirstChildOfClass("UIStroke")
+
+    local title = Text(row, opts.title, 14, FNT.B, "Text")
+    title.Position = UDim2.fromOffset(20, 12)
+    title.Size = UDim2.new(1, -100, 0, 20)
+
+    local desc = Text(row, opts.desc or "", 12, FNT.R, "Muted")
+    desc.Position = UDim2.fromOffset(20, 34)
+    desc.Size = UDim2.new(1, -100, 0, 18)
+
+    local strip = New("Frame", {
+        Size = UDim2.fromOffset(4, 28),
+        Position = UDim2.new(0, 4, 0.5, -14),
+        BorderSizePixel = 0,
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundTransparency = 1,
+    }, row)
+    Corner(strip, 2)
+    AccentGrad(strip, 90)
+
+    local glow = New("Frame", {
+        Size = UDim2.fromOffset(66, 42),
+        Position = UDim2.new(1, -75, 0.5, -21),
+        BorderSizePixel = 0,
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundTransparency = 1,
+    }, row)
+    Corner(glow, 21)
+    AccentGrad(glow, 0)
+
+    local track = New("Frame", {
+        Size = UDim2.fromOffset(50, 28),
+        Position = UDim2.new(1, -67, 0.5, -14),
+        BorderSizePixel = 0,
+    }, row)
+    Corner(track, 14)
+    local tStroke = Stroke(track, Theme.Stroke, 1, 0.2)
+
+    local fill = New("Frame", {
+        Size = UDim2.fromScale(1, 1),
+        BorderSizePixel = 0,
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundTransparency = 1,
+    }, track)
+    Corner(fill, 14)
+    AccentGrad(fill, 0)
+
+    local knob = New("Frame", {
+        Size = UDim2.fromOffset(22, 22),
+        Position = UDim2.fromOffset(3, 3),
+        BorderSizePixel = 0,
+    }, track)
+    Corner(knob, 11)
+
+    local state = Config[opts.key] == true
+
+    local function render(animate)
+        Apply(track, animate, { BackgroundColor3 = Theme.Button })
+        Apply(fill, animate, { BackgroundTransparency = state and 0 or 1 })
+        Apply(glow, animate, { BackgroundTransparency = state and 0.8 or 1 })
+        Apply(knob, animate, {
+            Position = state and UDim2.fromOffset(25, 3) or UDim2.fromOffset(3, 3),
+            BackgroundColor3 = state and Color3.new(1, 1, 1) or Theme.Muted,
+        })
+        Apply(strip, animate, { BackgroundTransparency = state and 0 or 1 })
+        Apply(tStroke, animate, { Color = state and Theme.Accent or Theme.Stroke })
+        if rowStroke then
+            Apply(rowStroke, animate, {
+                Color = state and Theme.Accent or Theme.Stroke,
+                Transparency = state and 0.4 or 0.35,
+            })
+        end
+        UpdateSummary()
+    end
+    OnTheme(function()
+        render(false)
+    end)
+
+    local function set(v, fire)
+        state = v
+        SetConfig(opts.key, v)
+        render(true)
+        if fire then
+            PlayToggleSound(v)
+            if opts.callback then
+                task.spawn(opts.callback, v)
+            end
+        end
+    end
+
+    row.MouseButton1Click:Connect(function()
+        set(not state, true)
+    end)
+
+    Refreshers[#Refreshers + 1] = function()
+        state = Config[opts.key] == true
+        render(false)
+        if opts.callback then
+            task.spawn(opts.callback, state)
+        end
+    end
+
+    if opts.callback then
+        task.defer(opts.callback, state)
+    end
+
+    return {
+        Get = function()
+            return state
+        end,
+        Set = function(v)
+            set(v, true)
+        end,
+    }
+end
+
+-- ---------- Slider ----------
+local function Slider(page, opts)
+    local min, max, step = opts.min, opts.max, opts.step or 1
+    local row = Panel(page, UDim2.new(1, 0, 0, 80))
+    Register(row)
+
+    local title = Text(row, opts.title, 14, FNT.B, "Text")
+    title.Position = UDim2.fromOffset(18, 10)
+    title.Size = UDim2.new(1, -120, 0, 20)
+
+    local desc = Text(row, opts.desc or "", 12, FNT.R, "Muted")
+    desc.Position = UDim2.fromOffset(18, 31)
+    desc.Size = UDim2.new(1, -120, 0, 16)
+
+    local pill = New("Frame", {
+        Size = UDim2.fromOffset(84, 24),
+        Position = UDim2.new(1, -100, 0, 10),
+        BorderSizePixel = 0,
+    }, row)
+    Corner(pill, 12)
+    Bind(pill, "BackgroundColor3", "Surface2")
+    Bind(Stroke(pill, Theme.Accent, 1, 0.5), "Color", "Accent")
+    local val = Text(row, "", 13, FNT.B, "Accent", Enum.TextXAlignment.Center)
+    val.Position = UDim2.new(1, -100, 0, 10)
+    val.Size = UDim2.fromOffset(84, 24)
+
+    local bar = New("Frame", {
+        Size = UDim2.new(1, -36, 0, 8),
+        Position = UDim2.fromOffset(18, 62),
+        BorderSizePixel = 0,
+    }, row)
+    Corner(bar, 4)
+    Bind(bar, "BackgroundColor3", "Button")
+
+    local fill = New("Frame", {
+        Size = UDim2.fromScale(0, 1),
+        BorderSizePixel = 0,
+        BackgroundColor3 = Color3.new(1, 1, 1),
+    }, bar)
+    Corner(fill, 4)
+    AccentGrad(fill, 0)
+
+    local knob = New("Frame", {
+        Size = UDim2.fromOffset(18, 18),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0, 0.5),
+        BorderSizePixel = 0,
+        BackgroundColor3 = Color3.new(1, 1, 1),
+    }, bar)
+    Corner(knob, 9)
+    Bind(Stroke(knob, Theme.Accent, 3, 0), "Color", "Accent")
+
+    local hit = New("TextButton", {
+        Size = UDim2.new(1, -36, 0, 30),
+        Position = UDim2.fromOffset(18, 50),
+        BackgroundTransparency = 1,
+        Text = "",
+        AutoButtonColor = false,
+    }, row)
+
+    local value = math.clamp(Config[opts.key], min, max)
+
+    local function show()
+        local a = (value - min) / (max - min)
+        fill.Size = UDim2.fromScale(a, 1)
+        knob.Position = UDim2.fromScale(a, 0.5)
+        val.Text = string.format("%g", value) .. (opts.suffix or "")
+    end
+
+    local function setValue(v, fire)
+        v = math.clamp(math.floor((v - min) / step + 0.5) * step + min, min, max)
+        if v == value and fire then
+            return
+        end
+        value = v
+        show()
+        if fire then
+            SetConfig(opts.key, v)
+            if opts.callback then
+                task.spawn(opts.callback, v)
+            end
+        end
+    end
+
+    local dragging = false
+    local function fromX(x)
+        local a = math.clamp((x - bar.AbsolutePosition.X) / math.max(1, bar.AbsoluteSize.X), 0, 1)
+        setValue(min + (max - min) * a, true)
+    end
+
+    hit.InputBegan:Connect(function(input)
+        if IsPointer(input) then
+            dragging = true
+            page.ScrollingEnabled = false
+            Tween(knob, 0.12, { Size = UDim2.fromOffset(23, 23) })
+            fromX(input.Position.X)
+        end
+    end)
+    Track(UIS.InputChanged:Connect(function(input)
+        if dragging and IsMove(input) then
+            fromX(input.Position.X)
+        end
+    end))
+    Track(UIS.InputEnded:Connect(function(input)
+        if dragging and IsPointer(input) then
+            dragging = false
+            page.ScrollingEnabled = true
+            Tween(knob, 0.12, { Size = UDim2.fromOffset(18, 18) })
+        end
+    end))
+
+    show()
+
+    Refreshers[#Refreshers + 1] = function()
+        value = math.clamp(Config[opts.key], min, max)
+        show()
+        if opts.callback then
+            task.spawn(opts.callback, value)
+        end
+    end
+
+    if opts.callback then
+        task.defer(opts.callback, value)
+    end
+end
+
+-- ---------- Dropdown (เดี่ยว / หลายตัวเลือก) ----------
+local function Split(s)
+    local t = {}
+    for v in string.gmatch(s or "", "[^|]+") do
+        t[#t + 1] = v
+    end
+    return t
+end
+
+local function Dropdown(page, opts)
+    local HEAD, ITEM = 62, 34
+    local options = opts.options
+    local multi = opts.multi == true
+    local row = Panel(page, UDim2.new(1, 0, 0, HEAD))
+    row.ClipsDescendants = true
+    Register(row)
+
+    local head = New("TextButton", {
+        Size = UDim2.new(1, 0, 0, HEAD),
+        BackgroundTransparency = 1,
+        Text = "",
+        AutoButtonColor = false,
+    }, row)
+
+    local title = Text(head, opts.title, 14, FNT.B, "Text")
+    title.Position = UDim2.fromOffset(20, 12)
+    title.Size = UDim2.new(1, -200, 0, 20)
+    local desc = Text(head, opts.desc or "", 12, FNT.R, "Muted")
+    desc.Position = UDim2.fromOffset(20, 33)
+    desc.Size = UDim2.new(1, -200, 0, 18)
+
+    local pill = New("Frame", {
+        Size = UDim2.fromOffset(150, 32),
+        Position = UDim2.new(1, -166, 0.5, -16),
+        BorderSizePixel = 0,
+    }, head)
+    Corner(pill, 16)
+    Bind(pill, "BackgroundColor3", "Surface2")
+    Bind(Stroke(pill, Theme.Accent, 1, 0.5), "Color", "Accent")
+    local vlabel = Text(pill, "", 12, FNT.B, "Accent", Enum.TextXAlignment.Center)
+    vlabel.Position = UDim2.fromOffset(10, 0)
+    vlabel.Size = UDim2.new(1, -34, 1, 0)
+
+    local arrow = New("Frame", {
+        Size = UDim2.fromOffset(12, 12),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(1, -16, 0.5, 0),
+        BackgroundTransparency = 1,
+    }, pill)
+    local a1 = New("Frame", { Size = UDim2.fromOffset(7, 2), Position = UDim2.fromOffset(0, 5), Rotation = 45, BorderSizePixel = 0 }, arrow)
+    local a2 = New("Frame", { Size = UDim2.fromOffset(7, 2), Position = UDim2.fromOffset(5, 5), Rotation = -45, BorderSizePixel = 0 }, arrow)
+    Corner(a1, 1)
+    Corner(a2, 1)
+    OnTheme(function()
+        a1.BackgroundColor3 = Theme.Accent
+        a2.BackgroundColor3 = Theme.Accent
+    end)
+
+    local list = New("Frame", {
+        Size = UDim2.new(1, -24, 0, #options * ITEM),
+        Position = UDim2.fromOffset(12, HEAD),
+        BackgroundTransparency = 1,
+    }, row)
+    List(list, 0)
+
+    local selected = {} -- set
+    local function readSelected()
+        selected = {}
+        if multi then
+            for _, v in ipairs(Split(Config[opts.key])) do
+                selected[v] = true
+            end
+        else
+            selected[Config[opts.key]] = true
+        end
+    end
+    readSelected()
+
+    local optionButtons = {}
+    local function renderValue()
+        if multi then
+            local n = 0
+            local names = {}
+            for _, o in ipairs(options) do
+                if selected[o] then
+                    n = n + 1
+                    names[#names + 1] = o
+                end
+            end
+            vlabel.Text = n == 0 and "ไม่เลือก" or (n <= 2 and table.concat(names, ", ") or (n .. " รายการ"))
+        else
+            vlabel.Text = tostring(Config[opts.key])
+        end
+    end
+
+    local function renderOptions(animate)
+        for o, b in pairs(optionButtons) do
+            local on = selected[o] == true
+            Apply(b.bg, animate, {
+                BackgroundColor3 = Theme.Accent,
+                BackgroundTransparency = on and 0.8 or 1,
+            })
+            Apply(b.dot, animate, { BackgroundTransparency = on and 0 or 0.7 })
+            b.lbl.TextColor3 = on and Theme.Text or Theme.Sub
+        end
+        renderValue()
+    end
+
+    for i, o in ipairs(options) do
+        local b = New("TextButton", {
+            Size = UDim2.new(1, 0, 0, ITEM),
+            BackgroundTransparency = 1,
+            Text = "",
+            AutoButtonColor = false,
+            LayoutOrder = i,
+        }, list)
+        local bg = New("Frame", {
+            Size = UDim2.new(1, 0, 1, -4),
+            Position = UDim2.fromOffset(0, 2),
+            BorderSizePixel = 0,
+            BackgroundTransparency = 1,
+        }, b)
+        Corner(bg, 10)
+        local dot = New("Frame", {
+            Size = UDim2.fromOffset(10, 10),
+            Position = UDim2.new(0, 12, 0.5, -5),
+            BorderSizePixel = 0,
+        }, bg)
+        Corner(dot, multi and 3 or 5)
+        Bind(dot, "BackgroundColor3", "Accent")
+        local lbl = Text(bg, o, 13, FNT.M)
+        lbl.Position = UDim2.fromOffset(32, 0)
+        lbl.Size = UDim2.new(1, -40, 1, 0)
+        optionButtons[o] = { bg = bg, dot = dot, lbl = lbl }
+
+        b.MouseButton1Click:Connect(function()
+            if multi then
+                selected[o] = not selected[o]
+                local t = {}
+                for _, name in ipairs(options) do
+                    if selected[name] then
+                        t[#t + 1] = name
+                    end
+                end
+                SetConfig(opts.key, table.concat(t, "|"))
+            else
+                selected = { [o] = true }
+                SetConfig(opts.key, o)
+            end
+            renderOptions(true)
+            PlayToggleSound(true)
+            if opts.callback then
+                task.spawn(opts.callback, multi and Split(Config[opts.key]) or o)
+            end
+        end)
+    end
+    OnTheme(function()
+        renderOptions(false)
+    end)
+
+    local open = false
+    local function setOpen(v)
+        open = v
+        Tween(row, 0.24, {
+            Size = UDim2.new(1, 0, 0, open and (HEAD + #options * ITEM + 10) or HEAD),
+        }, Enum.EasingStyle.Quint)
+        Tween(arrow, 0.2, { Rotation = open and 180 or 0 })
+    end
+    head.MouseButton1Click:Connect(function()
+        setOpen(not open)
+    end)
+
+    Refreshers[#Refreshers + 1] = function()
+        readSelected()
+        renderOptions(false)
+        if opts.callback then
+            task.spawn(opts.callback, multi and Split(Config[opts.key]) or Config[opts.key])
+        end
+    end
+
+    if opts.callback then
+        task.defer(opts.callback, multi and Split(Config[opts.key]) or Config[opts.key])
+    end
+end
+
+-- ---------- Button (มีริปเปิลตอนกด) ----------
+local function Button(page, opts)
+    local row = Panel(page, UDim2.new(1, 0, 0, 62))
+    Register(row)
+
+    local title = Text(row, opts.title, 14, FNT.B, "Text")
+    title.Position = UDim2.fromOffset(20, 11)
+    title.Size = UDim2.new(1, -160, 0, 20)
+    local desc = Text(row, opts.desc or "", 12, FNT.R, "Muted")
+    desc.Position = UDim2.fromOffset(20, 33)
+    desc.Size = UDim2.new(1, -160, 0, 18)
+
+    local btn = New("TextButton", {
+        Size = UDim2.fromOffset(118, 36),
+        Position = UDim2.new(1, -134, 0.5, -18),
+        BorderSizePixel = 0,
+        Text = opts.text or "กด",
+        TextSize = 13,
+        AutoButtonColor = false,
+        ClipsDescendants = true,
+    }, row)
+    SetFont(btn, FNT.B)
+    Corner(btn, 18)
+    local danger = opts.danger == true
+    if danger then
+        Bind(btn, "BackgroundColor3", "Bad")
+        btn.TextColor3 = Color3.new(1, 1, 1)
+    else
+        btn.BackgroundColor3 = Color3.new(1, 1, 1)
+        AccentGrad(btn, 0)
+        Bind(btn, "TextColor3", "OnAccent")
+    end
+
+    local sc = New("UIScale", { Scale = 1 }, btn)
+    btn.MouseEnter:Connect(function()
+        Tween(sc, 0.12, { Scale = 1.04 })
+    end)
+    btn.MouseLeave:Connect(function()
+        Tween(sc, 0.12, { Scale = 1 })
+    end)
+    btn.MouseButton1Down:Connect(function(x, y)
+        Tween(sc, 0.08, { Scale = 0.95 })
+        pcall(function()
+            local rel = (Vector2.new(x, y) - btn.AbsolutePosition) / math.max(0.1, MainScale.Scale)
+            local rip = New("Frame", {
+                Size = UDim2.fromOffset(4, 4),
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                Position = UDim2.fromOffset(rel.X, rel.Y),
+                BorderSizePixel = 0,
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                BackgroundTransparency = 0.4,
+            }, btn)
+            Corner(rip, 999)
+            Tween(rip, 0.5, { Size = UDim2.fromOffset(190, 190), BackgroundTransparency = 1 }, Enum.EasingStyle.Quint)
+            Debris:AddItem(rip, 0.6)
+        end)
+    end)
+    btn.MouseButton1Up:Connect(function()
+        Tween(sc, 0.18, { Scale = 1.04 }, Enum.EasingStyle.Back)
+    end)
+    btn.MouseButton1Click:Connect(function()
+        PlayToggleSound(true)
+        if opts.callback then
+            task.spawn(opts.callback)
+        end
+    end)
+    return { Button = btn }
+end
+
+-- ---------- TextBox ----------
+local function Input(page, opts)
+    local row = Panel(page, UDim2.new(1, 0, 0, 62))
+    Register(row)
+
+    local title = Text(row, opts.title, 14, FNT.B, "Text")
+    title.Position = UDim2.fromOffset(20, 11)
+    title.Size = UDim2.new(1, -240, 0, 20)
+    local desc = Text(row, opts.desc or "", 12, FNT.R, "Muted")
+    desc.Position = UDim2.fromOffset(20, 33)
+    desc.Size = UDim2.new(1, -240, 0, 18)
+
+    local box = New("TextBox", {
+        Size = UDim2.fromOffset(200, 34),
+        Position = UDim2.new(1, -216, 0.5, -17),
+        BorderSizePixel = 0,
+        Text = tostring(Config[opts.key] or ""),
+        PlaceholderText = opts.placeholder or "พิมพ์ที่นี่...",
+        ClearTextOnFocus = false,
+        TextSize = 12,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+    }, row)
+    SetFont(box, FNT.M)
+    Corner(box, 17)
+    Pad(box, 14, 14, 0, 0)
+    local bst = Stroke(box, Theme.Stroke, 1, 0.3)
+    OnTheme(function()
+        box.BackgroundColor3 = Theme.Surface2
+        box.TextColor3 = Theme.Text
+        box.PlaceholderColor3 = Theme.Muted
+        bst.Color = Theme.Stroke
+    end)
+    box.Focused:Connect(function()
+        Tween(bst, 0.15, { Color = Theme.Accent, Transparency = 0 })
+    end)
+    box.FocusLost:Connect(function(enter)
+        Tween(bst, 0.15, { Color = Theme.Stroke, Transparency = 0.3 })
+        SetConfig(opts.key, box.Text)
+        if opts.callback then
+            task.spawn(opts.callback, box.Text, enter)
+        end
+    end)
+    Refreshers[#Refreshers + 1] = function()
+        box.Text = tostring(Config[opts.key] or "")
+        if opts.callback then
+            task.spawn(opts.callback, box.Text, false)
+        end
+    end
+    return box
+end
+
+-- ---------- Keybind ----------
+local Listening = nil
+local function Keybind(page, opts)
+    local row = Panel(page, UDim2.new(1, 0, 0, 62))
+    Register(row)
+    local title = Text(row, opts.title, 14, FNT.B, "Text")
+    title.Position = UDim2.fromOffset(20, 11)
+    title.Size = UDim2.new(1, -170, 0, 20)
+    local desc = Text(row, opts.desc or "", 12, FNT.R, "Muted")
+    desc.Position = UDim2.fromOffset(20, 33)
+    desc.Size = UDim2.new(1, -170, 0, 18)
+
+    local btn = New("TextButton", {
+        Size = UDim2.fromOffset(130, 34),
+        Position = UDim2.new(1, -146, 0.5, -17),
+        BorderSizePixel = 0,
+        Text = "",
+        TextSize = 13,
+        AutoButtonColor = false,
+    }, row)
+    SetFont(btn, FNT.B)
+    Corner(btn, 17)
+    local bst = Stroke(btn, Theme.Accent, 1, 0.4)
+    local waiting = false
+    local function render()
+        btn.BackgroundColor3 = Theme.Surface2
+        btn.TextColor3 = waiting and Theme.Accent2 or Theme.Accent
+        btn.Text = waiting and "กดปุ่มที่ต้องการ..." or tostring(Config[opts.key])
+        bst.Color = waiting and Theme.Accent2 or Theme.Accent
+    end
+    OnTheme(render)
+    btn.MouseButton1Click:Connect(function()
+        waiting = true
+        Listening = function(name)
+            waiting = false
+            Listening = nil
+            if name ~= "Escape" then
+                SetConfig(opts.key, name)
+                Toast("ตั้งปุ่มเป็น " .. name, true)
+            end
+            render()
+        end
+        render()
+    end)
+    Refreshers[#Refreshers + 1] = render
+end
+
+Track(UIS.InputBegan:Connect(function(input, processed)
+    if input.UserInputType ~= Enum.UserInputType.Keyboard then
+        return
+    end
+    if Listening then
+        Listening(input.KeyCode.Name)
+        return
+    end
+    if processed then
+        return
+    end
+    if input.KeyCode.Name == Config.ToggleKey then
+        SetWindow(not Config.WindowVisible)
+    end
+end))
+
+-- ---------- Status (จุดสี + ข้อความ) ----------
+local StatusColors = { idle = "Muted", ok = "Good", warn = "Warn", bad = "Bad", busy = "Accent2" }
+
+local function StatusRow(page, opts)
+    local row = Panel(page, UDim2.new(1, 0, 0, 54))
+    Register(row)
+
+    local dot = New("Frame", {
+        Size = UDim2.fromOffset(12, 12),
+        Position = UDim2.fromOffset(20, 21),
+        BorderSizePixel = 0,
+    }, row)
+    Corner(dot, 6)
+    local halo = New("Frame", {
+        Size = UDim2.fromOffset(12, 12),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        BorderSizePixel = 0,
+        BackgroundTransparency = 0.6,
+    }, dot)
+    Corner(halo, 999)
+
+    local title = Text(row, opts.title, 14, FNT.B, "Text")
+    title.Position = UDim2.fromOffset(44, 8)
+    title.Size = UDim2.new(1, -170, 0, 20)
+    local sub = Text(row, opts.desc or "", 12, FNT.R, "Muted")
+    sub.Position = UDim2.fromOffset(44, 28)
+    sub.Size = UDim2.new(1, -170, 0, 18)
+
+    local tag = New("TextLabel", {
+        Size = UDim2.fromOffset(100, 26),
+        Position = UDim2.new(1, -116, 0.5, -13),
+        BorderSizePixel = 0,
+        Text = "",
+        TextSize = 12,
+    }, row)
+    SetFont(tag, FNT.B)
+    Corner(tag, 13)
+
+    local state, label = opts.state or "idle", opts.label or "ว่าง"
+    local pulse
+    local function render()
+        local c = Theme[StatusColors[state] or "Muted"]
+        dot.BackgroundColor3 = c
+        halo.BackgroundColor3 = c
+        tag.BackgroundColor3 = c:Lerp(Theme.Bg, 0.82)
+        tag.TextColor3 = c:Lerp(Theme.Text, Theme.Dark and 0.1 or 0.35)
+        tag.Text = label
+    end
+    OnTheme(render)
+
+    local function startPulse()
+        if pulse then
+            pulse:Cancel()
+            pulse = nil
+        end
+        halo.Size = UDim2.fromOffset(12, 12)
+        halo.BackgroundTransparency = 0.6
+        if state == "ok" or state == "busy" then
+            pulse = TweenService:Create(
+                halo,
+                TweenInfo.new(state == "busy" and 0.8 or 1.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, -1),
+                { Size = UDim2.fromOffset(28, 28), BackgroundTransparency = 1 }
+            )
+            pulse:Play()
+        end
+    end
+    startPulse()
+
+    return {
+        Set = function(newState, newLabel)
+            state = newState or state
+            label = newLabel or label
+            render()
+            startPulse()
+        end,
+    }
+end
+
+-- ============================================================
+--  COLOR PICKER  (สี่เหลี่ยมเฉด + แถบ Hue + HEX + พรีเซ็ต)
+-- ============================================================
+local PaletteColors = {
+    "FFF6EA", "F7E4CF", "FFD9E2", "F4A0B5", "EFA53A", "E07A5F", "B5838D", "8D6E63",
+    "81B29A", "A8DADC", "9DB4FF", "C3B1E1", "2B2D42", "1B1B2F", "FFFFFF", "000000",
+}
+
+local ActiveOverlay, ActivePopup
+local PaletteConns = {}
+
+local function ClosePalette()
+    for _, c in ipairs(PaletteConns) do
+        pcall(function()
+            c:Disconnect()
+        end)
+    end
+    PaletteConns = {}
+    if ActiveOverlay then
+        ActiveOverlay:Destroy()
+        ActiveOverlay = nil
+    end
+    if ActivePopup then
+        ActivePopup:Destroy()
+        ActivePopup = nil
+    end
+end
+
+local themePending = false
+local function QueueTheme()
+    if themePending then
+        return
+    end
+    themePending = true
+    task.defer(function()
+        themePending = false
+        ApplyTheme()
+    end)
+end
+
+local function OpenPalette(title, key, onPick)
+    ClosePalette()
+
+    ActiveOverlay = New("TextButton", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.new(0, 0, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Text = "",
+        AutoButtonColor = false,
+        ZIndex = 150,
+    }, Screen)
+    Tween(ActiveOverlay, 0.2, { BackgroundTransparency = 0.5 })
+    ActiveOverlay.MouseButton1Click:Connect(ClosePalette)
+
+    local PW, PH = 240, 304
+    local pop = New("CanvasGroup", {
+        Size = UDim2.fromOffset(PW, PH),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        BackgroundColor3 = Theme.Bg,
+        BorderSizePixel = 0,
+        GroupTransparency = 1,
+        ZIndex = 160,
+        Active = true,
+    }, Screen)
+    Corner(pop, 18)
+    Stroke(pop, Theme.Accent, 1.5, 0.3)
+    local vs = ViewSize()
+    New("UIScale", { Scale = math.clamp((vs.Y - 24) / PH, 0.5, 1) }, pop)
+    ActivePopup = pop
+    Tween(pop, 0.2, { GroupTransparency = 0 })
+
+    local okc, c0 = pcall(Color3.fromHex, Config[key])
+    if not okc then
+        c0 = Color3.new(1, 1, 1)
+    end
+    local H, S, V = c0:ToHSV()
+
+    local ttl = Text(pop, title or "เลือกสี", 14, FNT.B, Theme.Text)
+    ttl.Position = UDim2.fromOffset(14, 10)
+    ttl.Size = UDim2.new(1, -130, 0, 20)
+
+    local prev = New("Frame", {
+        Size = UDim2.fromOffset(36, 18),
+        Position = UDim2.fromOffset(PW - 82, 11),
+        BorderSizePixel = 0,
+    }, pop)
+    Corner(prev, 9)
+    Stroke(prev, Theme.Stroke, 1, 0.3)
+
+    local closeB = New("TextButton", {
+        Size = UDim2.fromOffset(24, 24),
+        Position = UDim2.fromOffset(PW - 38, 8),
+        BackgroundColor3 = Theme.Surface2,
+        BorderSizePixel = 0,
+        Text = "×",
+        TextSize = 18,
+        TextColor3 = Theme.Sub,
+        AutoButtonColor = false,
+    }, pop)
+    SetFont(closeB, FNT.B)
+    Corner(closeB, 12)
+    closeB.MouseButton1Click:Connect(ClosePalette)
+
+    local sv = New("Frame", {
+        Size = UDim2.fromOffset(PW - 28, 124),
+        Position = UDim2.fromOffset(14, 40),
+        BorderSizePixel = 0,
+        BackgroundColor3 = Color3.fromHSV(H, 1, 1),
+    }, pop)
+    Corner(sv, 10)
+    local wf = New("Frame", {
+        Size = UDim2.fromScale(1, 1),
+        BorderSizePixel = 0,
+        BackgroundColor3 = Color3.new(1, 1, 1),
+    }, sv)
+    Corner(wf, 10)
+    New("UIGradient", { Transparency = NumberSequence.new(0, 1) }, wf)
+    local bf = New("Frame", {
+        Size = UDim2.fromScale(1, 1),
+        BorderSizePixel = 0,
+        BackgroundColor3 = Color3.new(0, 0, 0),
+    }, sv)
+    Corner(bf, 10)
+    New("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(1, 0) }, bf)
+    local svCur = New("Frame", {
+        Size = UDim2.fromOffset(16, 16),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+    }, sv)
+    Corner(svCur, 8)
+    Stroke(svCur, Color3.new(1, 1, 1), 2.5, 0)
+    local svHit = New("TextButton", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        Text = "",
+        AutoButtonColor = false,
+    }, sv)
+
+    local hue = New("Frame", {
+        Size = UDim2.fromOffset(PW - 28, 14),
+        Position = UDim2.fromOffset(14, 176),
+        BorderSizePixel = 0,
+        BackgroundColor3 = Color3.new(1, 1, 1),
+    }, pop)
+    Corner(hue, 7)
+    New("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+            ColorSequenceKeypoint.new(1 / 6, Color3.fromRGB(255, 255, 0)),
+            ColorSequenceKeypoint.new(2 / 6, Color3.fromRGB(0, 255, 0)),
+            ColorSequenceKeypoint.new(3 / 6, Color3.fromRGB(0, 255, 255)),
+            ColorSequenceKeypoint.new(4 / 6, Color3.fromRGB(0, 0, 255)),
+            ColorSequenceKeypoint.new(5 / 6, Color3.fromRGB(255, 0, 255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0)),
+        }),
+    }, hue)
+    local hueCur = New("Frame", {
+        Size = UDim2.fromOffset(18, 18),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BorderSizePixel = 0,
+    }, hue)
+    Corner(hueCur, 9)
+    Stroke(hueCur, Color3.new(1, 1, 1), 2.5, 0)
+    local hueHit = New("TextButton", {
+        Size = UDim2.new(1, 0, 1, 12),
+        Position = UDim2.fromOffset(0, -6),
+        BackgroundTransparency = 1,
+        Text = "",
+        AutoButtonColor = false,
+    }, hue)
+
+    local box = New("TextBox", {
+        Size = UDim2.fromOffset(PW - 28, 30),
+        Position = UDim2.fromOffset(14, 202),
+        BackgroundColor3 = Theme.Surface2,
+        BorderSizePixel = 0,
+        Text = "",
+        PlaceholderText = "#RRGGBB",
+        ClearTextOnFocus = false,
+        TextSize = 12,
+        TextColor3 = Theme.Text,
+        PlaceholderColor3 = Theme.Muted,
+    }, pop)
+    SetFont(box, FNT.M)
+    Corner(box, 15)
+    Stroke(box, Theme.Stroke, 1, 0.3)
+
+    local function render(fromBox)
+        local c = Color3.fromHSV(H, S, V)
+        sv.BackgroundColor3 = Color3.fromHSV(H, 1, 1)
+        svCur.Position = UDim2.fromScale(S, 1 - V)
+        hueCur.Position = UDim2.fromScale(H, 0.5)
+        hueCur.BackgroundColor3 = Color3.fromHSV(H, 1, 1)
+        prev.BackgroundColor3 = c
+        if not fromBox then
+            box.Text = "#" .. string.upper(c:ToHex())
+        end
+        return c
+    end
+    local function commit(fromBox)
+        onPick(render(fromBox))
+    end
+    render(false)
+
+    local function bindDrag(hit, onMove)
+        local dragging, dInput = false, nil
+        local off = Vector2.zero
+        hit.InputBegan:Connect(function(input)
+            if not IsPointer(input) then
+                return
+            end
+            local p = Vector2.new(input.Position.X, input.Position.Y)
+            local a, sz = hit.AbsolutePosition, hit.AbsoluteSize
+            local inset = GuiService:GetGuiInset()
+            local q = p + inset
+            local inside = q.X >= a.X and q.X <= a.X + sz.X and q.Y >= a.Y and q.Y <= a.Y + sz.Y
+            off = inside and inset or Vector2.zero
+            dragging = true
+            dInput = input
+            onMove(p + off)
+        end)
+        PaletteConns[#PaletteConns + 1] = UIS.InputChanged:Connect(function(input)
+            if dragging and IsMove(input) then
+                if input.UserInputType == Enum.UserInputType.Touch and input ~= dInput then
+                    return
+                end
+                onMove(Vector2.new(input.Position.X, input.Position.Y) + off)
+            end
+        end)
+        PaletteConns[#PaletteConns + 1] = UIS.InputEnded:Connect(function(input)
+            if dragging and IsPointer(input) then
+                if input.UserInputType == Enum.UserInputType.Touch and input ~= dInput then
+                    return
+                end
+                dragging = false
+            end
+        end)
+    end
+
+    bindDrag(svHit, function(pos)
+        S = math.clamp((pos.X - sv.AbsolutePosition.X) / math.max(1, sv.AbsoluteSize.X), 0, 1)
+        V = 1 - math.clamp((pos.Y - sv.AbsolutePosition.Y) / math.max(1, sv.AbsoluteSize.Y), 0, 1)
+        commit(false)
+    end)
+    bindDrag(hueHit, function(pos)
+        H = math.clamp((pos.X - hue.AbsolutePosition.X) / math.max(1, hue.AbsoluteSize.X), 0, 1)
+        commit(false)
+    end)
+
+    box.FocusLost:Connect(function()
+        local h = string.match(box.Text, "^%s*#?(%x%x%x%x%x%x)%s*$")
+        if h then
+            H, S, V = Color3.fromHex(h):ToHSV()
+            commit(false)
+        else
+            box.TextColor3 = Theme.Bad
+            task.delay(0.8, function()
+                if box.Parent then
+                    box.TextColor3 = Theme.Text
+                    render(false)
+                end
+            end)
+        end
+    end)
+
+    for i, hexv in ipairs(PaletteColors) do
+        local c = Color3.fromHex(hexv)
+        local sw = New("TextButton", {
+            Size = UDim2.fromOffset(22, 22),
+            Position = UDim2.fromOffset(14 + ((i - 1) % 8) * 27, 244 + math.floor((i - 1) / 8) * 28),
+            BackgroundColor3 = c,
+            BorderSizePixel = 0,
+            Text = "",
+            AutoButtonColor = false,
+        }, pop)
+        Corner(sw, 11)
+        Stroke(sw, Theme.Stroke, 1, 0.3)
+        sw.MouseButton1Click:Connect(function()
+            H, S, V = c:ToHSV()
+            commit(false)
+        end)
+    end
+end
+
+local ColorRefreshers = {}
+
+local function ColorRow(page, title, key)
+    local row = Panel(page, UDim2.new(1, 0, 0, 52), "TextButton")
+    HoverRow(row)
+    Register(row)
+
+    local t = Text(row, title, 13, FNT.B, "Text")
+    t.Position = UDim2.fromOffset(20, 0)
+    t.Size = UDim2.new(1, -180, 1, 0)
+
+    local hexLabel = Text(row, "", 11, FNT.M, "Muted", Enum.TextXAlignment.Right)
+    hexLabel.Position = UDim2.new(1, -158, 0, 0)
+    hexLabel.Size = UDim2.fromOffset(84, 52)
+
+    local swatch = New("Frame", {
+        Size = UDim2.fromOffset(44, 26),
+        Position = UDim2.new(1, -62, 0.5, -13),
+        BorderSizePixel = 0,
+    }, row)
+    Corner(swatch, 13)
+    Bind(Stroke(swatch, Theme.Stroke, 1.2, 0.2), "Color", "Stroke")
+
+    local function refresh()
+        swatch.BackgroundColor3 = Hex(key, RGB(200, 200, 200))
+        hexLabel.Text = string.upper(tostring(Config[key]))
+    end
+    refresh()
+    Refreshers[#Refreshers + 1] = refresh
+    ColorRefreshers[#ColorRefreshers + 1] = refresh
+
+    row.MouseButton1Click:Connect(function()
+        OpenPalette(title, key, function(c)
+            SetConfig(key, "#" .. string.upper(c:ToHex()))
+            refresh()
+            QueueTheme()
+        end)
+    end)
+end
+
+-- ธีมสำเร็จรูป (แตะครั้งเดียวเปลี่ยนทั้ง UI)
+local ThemePresets = {
+    { "Honey", "#EFA53A", "#F4A0B5", "#FFF6EA", "#F7E4CF" },
+    { "Sakura", "#F26D9A", "#FFB7C9", "#FFF0F4", "#FBD9E3" },
+    { "Mint", "#3DB59A", "#A8E0CF", "#F0FBF7", "#D5F0E6" },
+    { "Sky", "#5B8DEF", "#9ED0F5", "#F1F7FF", "#DCE9FB" },
+    { "Moonlit", "#C3A2FF", "#F2A6C8", "#17141F", "#2A2438" },
+    { "Cocoa", "#E9A76B", "#F0B8C4", "#1E1714", "#33261F" },
+}
+
+local function ThemeGrid(page)
+    local holder = New("Frame", {
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        LayoutOrder = Next(page),
+    }, page)
+    New("UIGridLayout", {
+        CellSize = UDim2.new(1 / 3, -7, 0, 58),
+        CellPadding = UDim2.fromOffset(10, 10),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+    }, holder)
+    Register(holder)
+
+    for _, p in ipairs(ThemePresets) do
+        local card = Panel(holder, nil, "TextButton")
+        HoverRow(card)
+
+        local function dot(hex, x)
+            local d = New("Frame", {
+                Size = UDim2.fromOffset(22, 22),
+                AnchorPoint = Vector2.new(0, 0.5),
+                Position = UDim2.new(0, x, 0.5, 0),
+                BorderSizePixel = 0,
+                BackgroundColor3 = Color3.fromHex(hex),
+            }, card)
+            Corner(d, 11)
+            Stroke(d, Color3.new(0, 0, 0), 1, 0.85)
+        end
+        dot(p[4], 12)
+        dot(p[3], 26)
+        dot(p[2], 40)
+
+        local n = Text(card, p[1], 13, FNT.B, "Text")
+        n.Position = UDim2.fromOffset(72, 0)
+        n.Size = UDim2.new(1, -78, 1, 0)
+
+        card.MouseButton1Click:Connect(function()
+            SetConfig("UIAccentColor", p[2])
+            SetConfig("UIAccent2Color", p[3])
+            SetConfig("UIBackgroundColor", p[4])
+            SetConfig("UIButtonColor", p[5])
+            for _, fn in ipairs(ColorRefreshers) do
+                pcall(fn)
+            end
+            QueueTheme()
+            Toast("ใช้ธีม " .. p[1])
+        end)
+    end
+end
+
+--==================================================
+-- HOME
+--==================================================
+local ActiveCountGetters = {}
+local RefreshHome
+do
+local Home = MakePage("Home", "หน้าหลัก", "ภาพรวมและข้อมูลเซิร์ฟเวอร์")
+
+local Hero = Panel(Home, UDim2.new(1, 0, 0, 92))
+Tint(Hero)
+local HeroSub = Text(Hero, "", 12, FNT.M, "Muted")
+HeroSub.Position = UDim2.fromOffset(22, 14)
+HeroSub.Size = UDim2.new(0.6, 0, 0, 16)
+local HeroName = Text(Hero, LocalPlayer.DisplayName, 26, FNT.X, Color3.new(1, 1, 1))
+HeroName.Position = UDim2.fromOffset(22, 34)
+HeroName.Size = UDim2.new(0.6, 0, 0, 42)
+AccentGrad(HeroName, 0)
+local HeroClock = Text(Hero, "", 28, FNT.X, "Text", Enum.TextXAlignment.Right)
+HeroClock.Position = UDim2.new(0.5, 0, 0, 16)
+HeroClock.Size = UDim2.new(0.5, -22, 0, 36)
+local HeroDate = Text(Hero, "", 11, FNT.M, "Muted", Enum.TextXAlignment.Right)
+HeroDate.Position = UDim2.new(0.5, 0, 0, 56)
+HeroDate.Size = UDim2.new(0.5, -22, 0, 16)
+
+local MapImageUrl = "rbxthumb://type=GameIcon&id=" .. tostring(game.GameId) .. "&w=150&h=150"
+
+local MapCard = Panel(Home, UDim2.new(1, 0, 0, 118))
+MapCard.ClipsDescendants = true
+local MapBG = New("ImageLabel", {
+    Size = UDim2.fromScale(1, 1),
+    BackgroundTransparency = 1,
+    Image = MapImageUrl,
+    ScaleType = Enum.ScaleType.Crop,
+    ImageTransparency = 0.88,
+}, MapCard)
+Corner(MapBG, 14)
+Tint(MapCard)
+
+local MapIcon = New("ImageLabel", {
+    Size = UDim2.fromOffset(86, 86),
+    Position = UDim2.fromOffset(16, 16),
+    BorderSizePixel = 0,
+    Image = MapImageUrl,
+    ScaleType = Enum.ScaleType.Crop,
+}, MapCard)
+Corner(MapIcon, 20)
+Bind(MapIcon, "BackgroundColor3", "Button")
+Bind(Stroke(MapIcon, Theme.Accent, 2, 0.2), "Color", "Accent")
+
+local MapName = Text(MapCard, tostring(game.Name or "Unknown"), 18, FNT.X, "Text")
+MapName.Position = UDim2.fromOffset(114, 16)
+MapName.Size = UDim2.new(1, -130, 0, 26)
+local MapBy = Text(MapCard, "กำลังโหลดข้อมูลแมพ...", 12, FNT.R, "Muted")
+MapBy.Position = UDim2.fromOffset(114, 44)
+MapBy.Size = UDim2.new(1, -130, 0, 16)
+
+local Chips = New("Frame", {
+    Size = UDim2.new(1, -130, 0, 26),
+    Position = UDim2.fromOffset(114, 74),
+    BackgroundTransparency = 1,
+}, MapCard)
+New("UIListLayout", {
+    FillDirection = Enum.FillDirection.Horizontal,
+    Padding = UDim.new(0, 6),
+    SortOrder = Enum.SortOrder.LayoutOrder,
+}, Chips)
+
+local function Chip(text)
+    local c = New("TextLabel", {
+        Size = UDim2.fromOffset(0, 26),
+        AutomaticSize = Enum.AutomaticSize.X,
+        BorderSizePixel = 0,
+        Text = text,
+        TextSize = 11,
+        LayoutOrder = Next(Chips),
+    }, Chips)
+    SetFont(c, FNT.M)
+    Bind(c, "BackgroundColor3", "Surface2")
+    Bind(c, "TextColor3", "Sub")
+    Corner(c, 13)
+    Pad(c, 11, 11, 0, 0)
+    return c
+end
+
+Chip("ID " .. tostring(game.PlaceId))
+local ChipPlayers = Chip("ผู้เล่น -/-")
+
+task.spawn(function()
+    pcall(function()
+        local info = MarketplaceService:GetProductInfo(game.PlaceId)
+        if info then
+            if info.Name and info.Name ~= "" then
+                MapName.Text = tostring(info.Name)
+                BrandSub.Text = tostring(info.Name)
+            end
+            if info.Creator and info.Creator.Name then
+                MapBy.Text = "โดย " .. tostring(info.Creator.Name)
+            else
+                MapBy.Text = ""
+            end
+        end
+    end)
+end)
+
+local function Stat(parent, label)
+    local c = Panel(parent)
+    local bar = New("Frame", {
+        Size = UDim2.fromOffset(4, 20),
+        Position = UDim2.fromOffset(0, 12),
+        BorderSizePixel = 0,
+        BackgroundColor3 = Color3.new(1, 1, 1),
+    }, c)
+    Corner(bar, 2)
+    AccentGrad(bar, 90)
+    local l = Text(c, label, 11, FNT.M, "Muted")
+    l.Position = UDim2.fromOffset(18, 11)
+    l.Size = UDim2.new(1, -30, 0, 14)
+    local v = Text(c, "-", 16, FNT.X, "Text")
+    v.Position = UDim2.fromOffset(18, 30)
+    v.Size = UDim2.new(1, -30, 0, 24)
+    return v
+end
+
+local Grid = New("Frame", {
+    Size = UDim2.new(1, 0, 0, 0),
+    AutomaticSize = Enum.AutomaticSize.Y,
+    BackgroundTransparency = 1,
+    LayoutOrder = Next(Home),
+}, Home)
+New("UIGridLayout", {
+    CellSize = UDim2.new(0.5, -5, 0, 66),
+    CellPadding = UDim2.fromOffset(10, 10),
+    SortOrder = Enum.SortOrder.LayoutOrder,
+}, Grid)
+
+local StatPlayer = Stat(Grid, "ผู้เล่น")
+local StatTime = Stat(Grid, "เวลาในเซิร์ฟ")
+local StatFps = Stat(Grid, "FPS")
+local StatPing = Stat(Grid, "Ping")
+
+-- สรุปฟังก์ชันที่เปิดอยู่
+local SummaryCard = Panel(Home, UDim2.new(1, 0, 0, 58))
+local SummaryDot = New("Frame", {
+    Size = UDim2.fromOffset(12, 12),
+    Position = UDim2.fromOffset(20, 23),
+    BorderSizePixel = 0,
+}, SummaryCard)
+Corner(SummaryDot, 6)
+local SummaryText = Text(SummaryCard, "", 14, FNT.B, "Text")
+SummaryText.Position = UDim2.fromOffset(44, 0)
+SummaryText.Size = UDim2.new(1, -60, 1, 0)
+
+local PerfCard = Panel(Home, UDim2.new(1, 0, 0, 124))
+Tint(PerfCard)
+local PerfTitle = Text(PerfCard, "ประสิทธิภาพ (FPS)", 13, FNT.B, "Text")
+PerfTitle.Position = UDim2.fromOffset(18, 12)
+PerfTitle.Size = UDim2.new(0.5, 0, 0, 18)
+local PerfAvg = Text(PerfCard, "", 12, FNT.M, "Sub", Enum.TextXAlignment.Right)
+PerfAvg.Position = UDim2.new(0.5, 0, 0, 12)
+PerfAvg.Size = UDim2.new(0.5, -18, 0, 18)
+local PerfBars = New("Frame", {
+    Size = UDim2.new(1, -36, 0, 70),
+    Position = UDim2.fromOffset(18, 42),
+    BackgroundTransparency = 1,
+}, PerfCard)
+
+local PERF_N = 36
+local PerfBar, PerfHist = {}, {}
+for i = 1, PERF_N do
+    local b = New("Frame", {
+        Size = UDim2.new(1 / PERF_N, -2, 0, 2),
+        AnchorPoint = Vector2.new(0, 1),
+        Position = UDim2.new((i - 1) / PERF_N, 1, 1, 0),
+        BorderSizePixel = 0,
+        BackgroundTransparency = 1,
+    }, PerfBars)
+    Corner(b, 3)
+    PerfBar[i] = b
+    PerfHist[i] = 0
+end
+
+local function PerfUpdate()
+    table.remove(PerfHist, 1)
+    PerfHist[#PerfHist + 1] = Metrics.fps
+    local peak, sum, cnt = 60, 0, 0
+    for _, v in ipairs(PerfHist) do
+        if v > peak then
+            peak = v
+        end
+        if v > 0 then
+            sum = sum + v
+            cnt = cnt + 1
+        end
+    end
+    for i, v in ipairs(PerfHist) do
+        local b = PerfBar[i]
+        b.Size = UDim2.new(1 / PERF_N, -2, math.clamp(v / peak, 0.04, 1), 0)
+        b.BackgroundColor3 = Level(v, 50, 30, true)
+        b.BackgroundTransparency = v == 0 and 1 or 0.08
+    end
+    PerfAvg.Text = "เฉลี่ย " .. tostring(cnt > 0 and math.floor(sum / cnt + 0.5) or 0) .. " FPS"
+end
+
+local sessionStart = os.time()
+
+UpdateSummary = function()
+    local n = 0
+    for _, g in ipairs(ActiveCountGetters) do
+        if g() then
+            n = n + 1
+        end
+    end
+    SummaryText.Text = n == 0 and "ยังไม่มีฟังก์ชันที่เปิดอยู่" or ("เปิดใช้งานอยู่ " .. n .. " ฟังก์ชัน")
+    SummaryDot.BackgroundColor3 = n == 0 and Theme.Muted or Theme.Good
+end
+
+RefreshHome = function()
+    local hr = tonumber(os.date("%H")) or 12
+    HeroSub.Text = (hr >= 5 and hr < 12 and "อรุณสวัสดิ์")
+        or (hr >= 12 and hr < 17 and "สวัสดีตอนบ่าย")
+        or (hr >= 17 and hr < 21 and "สวัสดีตอนเย็น")
+        or "ราตรีสวัสดิ์"
+    HeroClock.Text = os.date("%H:%M")
+    HeroDate.Text = os.date("%d / %m / %Y")
+    local sec = math.max(0, os.time() - sessionStart)
+    StatPlayer.Text = LocalPlayer.DisplayName
+    StatTime.Text = string.format("%02d:%02d:%02d", math.floor(sec / 3600), math.floor((sec % 3600) / 60), sec % 60)
+    StatFps.Text = tostring(Metrics.fps)
+    StatFps.TextColor3 = Level(Metrics.fps, 50, 30, true)
+    StatPing.Text = tostring(Metrics.ping) .. " ms"
+    StatPing.TextColor3 = Level(Metrics.ping, 80, 160, false)
+    ChipPlayers.Text = string.format("ผู้เล่น %d/%d", #Players:GetPlayers(), Players.MaxPlayers)
+    PerfUpdate()
+end
+
+task.spawn(function()
+    while Screen.Parent do
+        RefreshStats()
+        RefreshHome()
+        task.wait(0.5)
+    end
+end)
+
+end
+
+--==================================================
+-- FUNCTIONS
+--==================================================
+local Functions = MakePage("Functions", "ฟังก์ชัน", "เปิด / ปิดได้ทันที  •  เซฟอัตโนมัติ")
+
+--==================================================
+-- TD AUTO  (Challenge / Farm / Event Halloween / Shop / Travel)
+-- อยู่ในฟังก์ชันเดียว เพื่อไม่ให้ชนลิมิต local ของ UI
+--==================================================
+;(function()
+    local RS = game:GetService("ReplicatedStorage")
+    local TeleportService = game:GetService("TeleportService")
+
+    local LOBBY_PLACE_ID = 117949143041402
+    local MATCH_TP_ID = 97246719761307
+    local IN_LOBBY = (game.PlaceId == LOBBY_PLACE_ID)
+    local Remotes = RS:WaitForChild("Remotes")
+    local GameEvents = RS:WaitForChild("GameEvents")
+
+    local MODE_KEYS = { Story = "Story", Mysterious = "Mysterios", Raid = "Raids" }
+    local DIFFS = { "Normal", "Hard", "Nightmare" }
+
+    local function alive()
+        return Screen.Parent ~= nil
+    end
+
+    local function Reg(t)
+        ActiveCountGetters[#ActiveCountGetters + 1] = t.Get
+        return t
+    end
+
+    local function fmt(n)
+        local s = tostring(math.floor(tonumber(n) or 0))
+        while true do
+            local r, k = s:gsub("^(-?%d+)(%d%d%d)", "%1,%2")
+            s = r
+            if k == 0 then
+                break
+            end
+        end
+        return s
+    end
+
+    local function attr(name)
+        return tonumber(LocalPlayer:GetAttribute(name)) or 0
+    end
+
+    local function pickSet(str)
+        local set = {}
+        for _, v in ipairs(Split(str)) do
+            set[v] = true
+        end
+        return set
+    end
+
+    ------------------------------------------------------------------
+    -- SHOP CONFIG (ดึงจากเกม ถ้าไม่ได้ใช้ค่าสำรองจากดัมพ์ล่าสุด)
+    ------------------------------------------------------------------
+    local ShopCfg
+    do
+        local ok, cfg = pcall(function()
+            return require(RS.Modules.ShopModule.ShopConfig)
+        end)
+        if ok and type(cfg) == "table" and cfg.GoldShopItems and cfg.GemsShopItems then
+            ShopCfg = cfg
+        else
+            ShopCfg = {
+                RestockDuration = 3600,
+                GoldShopItems = {
+                    { ID = "Fruit_1", Price = 150, MaxStock = 10 },
+                    { ID = "Fruit_2", Price = 350, MaxStock = 5 },
+                    { ID = "RareShard", Price = 500, MaxStock = 25 },
+                    { ID = "EpicShard", Price = 1000, MaxStock = 20 },
+                    { ID = "LegendShard", Price = 2500, MaxStock = 20 },
+                    { ID = "MythicShard", Price = 5000, MaxStock = 20 },
+                    { ID = "MysteriousShard", Price = 65000, MaxStock = 10 },
+                    { ID = "Trait", Price = 3000, MaxStock = 10 },
+                    { ID = "StatRerollAll", Price = 500, MaxStock = 10 },
+                    { ID = "StatReroll", Price = 1200, MaxStock = 10 },
+                    { ID = "MysteryCapsule", Price = 3000, MaxStock = 50 },
+                    { ID = "BingoCoin", Price = 2000, MaxStock = 10 },
+                },
+                GemsShopItems = {
+                    { ID = "Fruit_1", Price = 10, MaxStock = 10 },
+                    { ID = "Fruit_2", Price = 25, MaxStock = 5 },
+                    { ID = "RareShard", Price = 35, MaxStock = 25 },
+                    { ID = "EpicShard", Price = 75, MaxStock = 20 },
+                    { ID = "LegendShard", Price = 180, MaxStock = 20 },
+                    { ID = "MythicShard", Price = 350, MaxStock = 20 },
+                    { ID = "MysteriousShard", Price = 10000, MaxStock = 10 },
+                    { ID = "Trait", Price = 200, MaxStock = 10 },
+                    { ID = "StatRerollAll", Price = 35, MaxStock = 10 },
+                    { ID = "StatReroll", Price = 80, MaxStock = 10 },
+                    { ID = "MysteryCapsule", Price = 750, MaxStock = 50 },
+                    { ID = "BingoCoin", Price = 1000, MaxStock = 10 },
+                },
+            }
+        end
+    end
+
+    -- รายการสินค้าทั้งหมด (รวมของใหม่อัตโนมัติ ไม่ต้องแก้สคริปต์เมื่อเกมเพิ่มของ)
+    local SHOP_IDS = {}
+    do
+        local seen = {}
+        for _, list in ipairs({ ShopCfg.GoldShopItems, ShopCfg.GemsShopItems }) do
+            for _, it in ipairs(list) do
+                if not seen[it.ID] then
+                    seen[it.ID] = true
+                    SHOP_IDS[#SHOP_IDS + 1] = it.ID
+                end
+            end
+        end
+    end
+
+    local function shopList(cur)
+        return (cur == "Coins") and ShopCfg.GoldShopItems or ShopCfg.GemsShopItems
+    end
+
+    local function shopWantedIds(cur)
+        local all = (cur == "Coins") and Config.ShopCoinsAll or Config.ShopGemsAll
+        local set = pickSet((cur == "Coins") and Config.ShopCoinsPick or Config.ShopGemsPick)
+        local out = {}
+        for _, it in ipairs(shopList(cur)) do
+            if all or set[it.ID] then
+                out[it.ID] = true
+            end
+        end
+        return out
+    end
+
+    local function shopWanted()
+        if not Config.AutoShop then
+            return false
+        end
+        for _, cur in ipairs({ "Coins", "Gems" }) do
+            if next(shopWantedIds(cur)) then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function currentCycle()
+        return math.floor(os.time() / ShopCfg.RestockDuration)
+    end
+
+    ------------------------------------------------------------------
+    -- HALLOWEEN EVENT SHOP (ใช้ HalloweenCoin แลกของ)
+    ------------------------------------------------------------------
+    local HCfg
+    do
+        local ok, cfg = pcall(function()
+            return require(RS.Modules.HalloweenEventConfig)
+        end)
+        if ok and type(cfg) == "table" and type(cfg.ShopItems) == "table" then
+            HCfg = cfg
+        else
+            HCfg = {
+                CurrencyKey = "HalloweenCoin",
+                ShopItems = {
+                    { ID = "Trait", DisplayName = "Trait Reroll", Price = 100, MaxStock = 100 },
+                    { ID = "StatRerollAll", DisplayName = "Stats Reroll All", Price = 50, MaxStock = 100 },
+                    { ID = "StatReroll", DisplayName = "Stats Reroll", Price = 50, MaxStock = 100 },
+                    { ID = "Gems", DisplayName = "Gems x1000", Price = 700, MaxStock = 5000 },
+                    { ID = "Coins", DisplayName = "Coins x1000", Price = 700, MaxStock = 10000 },
+                    { ID = "HalloweenCapsule", DisplayName = "Halloween Capsule", Price = 500, MaxStock = 9999 },
+                    { ID = "BingoCoin", DisplayName = "Bingo Coin", Price = 10000, MaxStock = 9999 },
+                    { ID = "AlucardEvo", DisplayName = "Gun of Vanhelsing", Price = 100000, MaxStock = 9999 },
+                },
+            }
+        end
+    end
+    local H_KEY = HCfg.CurrencyKey or "HalloweenCoin"
+
+    local HAL_LABELS, HAL_BY_LABEL = {}, {}
+    for _, it in ipairs(HCfg.ShopItems) do
+        local label = tostring(it.DisplayName or it.ID)
+        if HAL_BY_LABEL[label] then
+            label = label .. " (" .. it.ID .. ")"
+        end
+        HAL_LABELS[#HAL_LABELS + 1] = label
+        HAL_BY_LABEL[label] = it
+    end
+
+    ------------------------------------------------------------------
+    -- MAPS
+    ------------------------------------------------------------------
+    local FALLBACK_MAPS = {
+        Story = {
+            { key = "GreenForest", name = "Namek World", stages = 5, mode = "Story" },
+            { key = "KirigakureVillage", name = "Kirigakure Village", stages = 5, mode = "Story" },
+            { key = "CursedMall", name = "Cursed Mall", stages = 5, mode = "Story" },
+            { key = "ValhallaArena", name = "Valhalla Arena", stages = 5, mode = "Story" },
+            { key = "FateStory", name = "Fate Story", stages = 5, mode = "Story" },
+        },
+        Mysterious = {
+            { key = "GreenForestMyterious", name = "Namek World", stages = 3, mode = "Mysterios" },
+            { key = "KirigakureVillageMyterious", name = "Kirigakure Village", stages = 3, mode = "Mysterios" },
+            { key = "CursedMallMyterious", name = "Cursed Mall", stages = 3, mode = "Mysterios" },
+            { key = "ValhallaArenaMyterious", name = "Valhalla Arena", stages = 3, mode = "Mysterios" },
+            { key = "FateStoryMysterious", name = "Fate Story Mysterious", stages = 3, mode = "Mysterios" },
+        },
+        Raid = {
+            { key = "CursedAcademy", name = "Tokyo Jujutsu High", stages = 3, mode = "Raids" },
+            { key = "AlabastaArc", name = "Alabasta Arc", stages = 3, mode = "Raids" },
+            { key = "ScepterTower", name = "Scepter Tower", stages = 3, mode = "Raids" },
+        },
+    }
+    local FALLBACK_EVENTS = {
+        { key = "HalloweenSoul", name = "Halloween (Event)", stages = 1, mode = "Event" },
+        { key = "FateEvent", name = "Fate (Event)", stages = 1, mode = "Event" },
+    }
+
+    local function getMapConfig()
+        local ok, cfg = pcall(function()
+            return require(RS.Modules.PlayingModule.MapConfig)
+        end)
+        if ok and type(cfg) == "table" then
+            return cfg
+        end
+        return nil
+    end
+
+    local function mapList(modeName)
+        local want = MODE_KEYS[modeName]
+        local list = {}
+        local cfg = getMapConfig()
+        if cfg then
+            for k, v in pairs(cfg) do
+                if type(k) == "number" and k < 90 and type(v) == "table" and v.Mode == want and v.Locked ~= true then
+                    list[#list + 1] = { order = k, key = v.MapToCreate, name = v.Name, stages = v.TotalStages or 1, mode = v.Mode }
+                end
+            end
+            table.sort(list, function(a, b)
+                return a.order < b.order
+            end)
+        end
+        if #list == 0 then
+            for i, m in ipairs(FALLBACK_MAPS[modeName] or {}) do
+                list[i] = m
+            end
+        end
+        return list
+    end
+
+    local function eventList()
+        local list = {}
+        local cfg = getMapConfig()
+        if cfg then
+            for k, v in pairs(cfg) do
+                if type(k) == "number" and k < 90 and type(v) == "table" and v.Mode == "Event" and v.Locked ~= true then
+                    list[#list + 1] = { order = k, key = v.MapToCreate, name = v.Name, stages = v.TotalStages or 1, mode = v.Mode }
+                end
+            end
+            table.sort(list, function(a, b)
+                return a.order > b.order -- อีเว้นท์ใหม่ล่าสุดขึ้นก่อน
+            end)
+        end
+        if #list == 0 then
+            list = FALLBACK_EVENTS
+        end
+        return list
+    end
+
+    -- ตัวเลือก dropdown ฟาร์ม: "[Story] Namek World"
+    local FARM_LABELS, FARM_BY_LABEL = {}, {}
+    for _, modeName in ipairs({ "Story", "Mysterious", "Raid" }) do
+        for _, m in ipairs(mapList(modeName)) do
+            local label = string.format("[%s] %s", modeName, m.name)
+            FARM_LABELS[#FARM_LABELS + 1] = label
+            FARM_BY_LABEL[label] = m
+        end
+    end
+
+    local EVENT_LABELS, EVENT_BY_LABEL = {}, {}
+    for _, e in ipairs(eventList()) do
+        EVENT_LABELS[#EVENT_LABELS + 1] = e.name
+        EVENT_BY_LABEL[e.name] = e
+    end
+
+    -- ค่าเริ่มต้นของ dropdown ให้ตรงกับตัวเลือกที่มีจริง
+    if not FARM_BY_LABEL[Config.FarmTarget] and FARM_LABELS[1] then
+        SetConfig("FarmTarget", FARM_LABELS[1])
+    end
+    if not EVENT_BY_LABEL[Config.EventPick] and EVENT_LABELS[1] then
+        local pick = EVENT_LABELS[1]
+        for _, l in ipairs(EVENT_LABELS) do
+            if EVENT_BY_LABEL[l].key == "HalloweenSoul" then
+                pick = l
+            end
+        end
+        SetConfig("EventPick", pick)
+    end
+
+    local ACT_LABELS = { "Act 1", "Act 2", "Act 3", "Act 4", "Act 5" }
+
+    local function farmEntry()
+        return FARM_BY_LABEL[Config.FarmTarget] or FARM_BY_LABEL[FARM_LABELS[1]]
+    end
+
+    local function eventEntry()
+        return EVENT_BY_LABEL[Config.EventPick] or EVENT_BY_LABEL[EVENT_LABELS[1]]
+    end
+
+    local function stageRewards(mapKey, stage)
+        local ok, r = pcall(function()
+            local folder = RS.Modules.PlayingModule.MapConfig.MapStageReward
+            local m = require(folder:FindFirstChild(mapKey))
+            return m[stage] and m[stage].Rewards
+        end)
+        if ok and r then
+            return r
+        end
+        return {}
+    end
+
+    ------------------------------------------------------------------
+    -- CHALLENGE STATE
+    ------------------------------------------------------------------
+    local function loadNext()
+        local ok, t = pcall(function()
+            return HttpService:JSONDecode(Config.StateChallengeNext)
+        end)
+        if ok and type(t) == "table" then
+            return t
+        end
+        return {}
+    end
+
+    local function saveNext(t)
+        SetConfig("StateChallengeNext", HttpService:JSONEncode(t))
+    end
+
+    local function challengeDue()
+        local t = loadNext()
+        local now = os.time()
+        for tab, ts in pairs(t) do
+            if (Config.ChallengeTab == "All" or Config.ChallengeTab == tab) and type(ts) == "number" and now >= ts then
+                return true, tab
+            end
+        end
+        return false
+    end
+
+    ------------------------------------------------------------------
+    -- STATUS ROWS (สร้างก่อนเพื่อให้อยู่บนสุดของหน้า)
+    ------------------------------------------------------------------
+    local MainStatus, MoneyStatus, TimerStatus
+    local doChallengeNow, doShopNow, doHalloweenNow
+    local FarmToggle, EventToggle
+
+    Section(Functions, "สถานะ")
+    MainStatus = StatusRow(Functions, { title = "สถานะบอท", desc = "กำลังทำอะไรอยู่", state = "idle", label = "เริ่มทำงาน" })
+    MoneyStatus = StatusRow(Functions, { title = "ทรัพยากร", desc = "Coins / Gems / Halloween Coin", state = "ok", label = "-" })
+    TimerStatus = StatusRow(Functions, { title = "เวลารีเซ็ต", desc = "ร้านค้า / Challenge", state = "ok", label = "-" })
+
+    local statusText = "เริ่มทำงาน"
+    local function setStatus(t, state)
+        statusText = t
+        MainStatus.Set(state or "busy", t)
+    end
+
+    local function challengeTabs()
+        local o = { "All", "Daily", "Weekly" }
+        return o
+    end
+
+    ------------------------------------------------------------------
+    -- PAGE: FUNCTIONS (Challenge)
+    ------------------------------------------------------------------
+    Section(Functions, "Challenge")
+    Reg(Toggle(Functions, {
+        key = "AutoChallenge",
+        title = "Auto Challenge",
+        desc = "ลง Daily / Weekly Challenge เมื่อพร้อม (มาก่อนฟาร์มเสมอ)",
+    }))
+    Dropdown(Functions, {
+        key = "ChallengeTab",
+        title = "Challenge ที่ลง",
+        desc = "เลือก 1 อย่าง",
+        options = challengeTabs(),
+    })
+    Toggle(Functions, {
+        key = "AutoLeaveChallenge",
+        title = "กลับ Lobby หลังจบ Challenge",
+        desc = "ฟาร์ม/Event จะไม่ออกเองจนกว่า Challenge จะมา",
+    })
+    Slider(Functions, {
+        key = "LeaveDelay",
+        title = "หน่วงก่อนออกจากแมตช์",
+        desc = "รอหลังจบ Challenge ก่อนกลับ Lobby",
+        min = 0, max = 15, step = 1, suffix = " วิ",
+    })
+    Section(Functions, "ทำทันที (ใน Lobby)")
+    Button(Functions, {
+        title = "ลง Challenge ตอนนี้",
+        desc = "ข้ามเวลารอ แล้วลองลงทันที",
+        text = "ลง",
+        callback = function()
+            doChallengeNow()
+        end,
+    })
+    Button(Functions, {
+        title = "ซื้อของร้านค้าตอนนี้",
+        desc = "ซื้อตามรายการที่เลือกไว้",
+        text = "ซื้อ",
+        callback = function()
+            doShopNow()
+        end,
+    })
+    Button(Functions, {
+        title = "แลกของร้านฮาโลวีนตอนนี้",
+        desc = "ใช้ Halloween Coin แลกตามรายการที่เลือก",
+        text = "แลก",
+        callback = function()
+            doHalloweenNow()
+        end,
+    })
+
+    ------------------------------------------------------------------
+    -- PAGE: FARM
+    ------------------------------------------------------------------
+    local Farm = MakePage("Farm", "ฟาร์มด่าน", "Story / Mysterious / Raid  •  เลือกแมพจาก dropdown")
+    Section(Farm, "ฟาร์มด่าน")
+    FarmToggle = Reg(Toggle(Farm, {
+        key = "AutoFarm",
+        title = "Auto ฟาร์มด่าน",
+        desc = "เปิดได้ทีละอย่างกับ Event",
+        callback = function(v)
+            if v and EventToggle and EventToggle.Get() then
+                EventToggle.Set(false)
+            end
+        end,
+    }))
+    Dropdown(Farm, {
+        key = "FarmTarget",
+        title = "แมพ",
+        desc = "รวมทุกโหมด  [Story] / [Mysterious] / [Raid]",
+        options = FARM_LABELS,
+    })
+    Dropdown(Farm, {
+        key = "FarmAct",
+        title = "Act (ด่านย่อย)",
+        desc = "ถ้าแมพมี Act น้อยกว่า จะใช้ Act สูงสุดของแมพนั้น",
+        options = ACT_LABELS,
+    })
+    Dropdown(Farm, {
+        key = "FarmDifficulty",
+        title = "ความยาก",
+        desc = "Normal / Hard / Nightmare",
+        options = DIFFS,
+    })
+
+    ------------------------------------------------------------------
+    -- PAGE: EVENT (Halloween)
+    ------------------------------------------------------------------
+    local Event = MakePage("Event", "อีเว้นท์ฮาโลวีน", "ลง Event + แลกของด้วย Halloween Coin")
+    Section(Event, "ฟาร์ม Event")
+    EventToggle = Reg(Toggle(Event, {
+        key = "AutoEvent",
+        title = "Auto ลง Event",
+        desc = "ต้องเลเวล 10 ขึ้นไป  •  เปิดได้ทีละอย่างกับฟาร์มด่าน",
+        callback = function(v)
+            if v and FarmToggle and FarmToggle.Get() then
+                FarmToggle.Set(false)
+            end
+        end,
+    }))
+    Dropdown(Event, {
+        key = "EventPick",
+        title = "เลือก Event",
+        desc = "Halloween (Event) เป็นค่าเริ่มต้น",
+        options = EVENT_LABELS,
+    })
+    Dropdown(Event, {
+        key = "EventDifficulty",
+        title = "ความยาก Event",
+        desc = "Nightmare ดรอปหายากสูงสุด",
+        options = DIFFS,
+    })
+    Section(Event, "ร้านแลกของฮาโลวีน (Halloween Coin)")
+    Reg(Toggle(Event, {
+        key = "AutoHalloweenShop",
+        title = "Auto แลกของฮาโลวีน",
+        desc = "แลกเมื่ออยู่ Lobby และเหรียญเพิ่มขึ้น",
+    }))
+    Dropdown(Event, {
+        key = "HalloweenPick",
+        title = "ของที่จะแลก",
+        desc = "เลือกได้หลายอย่าง  •  แลกตามลำดับในรายการ",
+        multi = true,
+        options = HAL_LABELS,
+    })
+    Slider(Event, {
+        key = "HalloweenLeaveAt",
+        title = "กลับ Lobby ไปแลกเมื่อเหรียญเพิ่ม",
+        desc = "0 = ไม่ออกเอง  •  ใช้ตอนฟาร์ม Event อยู่",
+        min = 0, max = 20000, step = 500, suffix = " เหรียญ",
+    })
+
+    ------------------------------------------------------------------
+    -- PAGE: SHOP
+    ------------------------------------------------------------------
+    local Shop = MakePage("Shop", "ร้านค้า", "ซื้อของอัตโนมัติ  •  ยืนใน Lobby จนซื้อหมดสต็อก")
+    Section(Shop, "ตั้งค่า")
+    Reg(Toggle(Shop, {
+        key = "AutoShop",
+        title = "Auto ซื้อของร้านค้า",
+        desc = "ซื้อใหม่ทุกครั้งที่ร้านรีสต็อก (ทุก xx:00 เวลาจริง)",
+    }))
+    Toggle(Shop, {
+        key = "ShopLeaveToBuy",
+        title = "ออกจากแมตช์ไปซื้อเมื่อรีสต็อก",
+        desc = "ตอนฟาร์ม/Event อยู่ จะกลับ Lobby มาซื้อ แล้วกลับไปลงต่อ",
+    })
+    Section(Shop, "ร้าน Coins")
+    Toggle(Shop, { key = "ShopCoinsAll", title = "ซื้อทุกอย่างในร้าน Coins", desc = "ข้ามรายการที่เลือกด้านล่าง" })
+    Dropdown(Shop, {
+        key = "ShopCoinsPick",
+        title = "สินค้าร้าน Coins",
+        desc = "เลือกได้หลายอย่าง (" .. #ShopCfg.GoldShopItems .. " รายการ)",
+        multi = true,
+        options = SHOP_IDS,
+    })
+    Section(Shop, "ร้าน Gems")
+    Toggle(Shop, { key = "ShopGemsAll", title = "ซื้อทุกอย่างในร้าน Gems", desc = "ข้ามรายการที่เลือกด้านล่าง" })
+    Dropdown(Shop, {
+        key = "ShopGemsPick",
+        title = "สินค้าร้าน Gems",
+        desc = "เลือกได้หลายอย่าง (" .. #ShopCfg.GemsShopItems .. " รายการ)",
+        multi = true,
+        options = SHOP_IDS,
+    })
+
+    ------------------------------------------------------------------
+    -- PAGE: TRAVEL (เข้าแมพ/เซิร์ฟด้วยลิงก์)
+    ------------------------------------------------------------------
+    local Travel = MakePage("Travel", "วาร์ป / ลิงก์", "ไป Lobby หรือเข้าเซิร์ฟเวอร์ด้วยลิงก์")
+    Section(Travel, "วาร์ปด่วน")
+    Dropdown(Travel, {
+        key = "TravelTarget",
+        title = "ปลายทาง",
+        desc = "เลือกแล้วกดปุ่มวาร์ปด้านล่าง",
+        options = { "Lobby", "Match Place", "Rejoin เซิร์ฟนี้" },
+    })
+    Button(Travel, {
+        title = "วาร์ปไปปลายทาง",
+        desc = "ใช้ TeleportService",
+        text = "วาร์ป",
+        callback = function()
+            local t = Config.TravelTarget
+            local ok, err = pcall(function()
+                if t == "Lobby" then
+                    TeleportService:Teleport(LOBBY_PLACE_ID, LocalPlayer)
+                elseif t == "Match Place" then
+                    TeleportService:Teleport(MATCH_TP_ID, LocalPlayer)
+                else
+                    TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+                end
+            end)
+            Toast(ok and ("กำลังวาร์ป: " .. tostring(t)) or ("วาร์ปไม่สำเร็จ: " .. tostring(err)), ok)
+        end,
+    })
+    Section(Travel, "เข้าด้วยลิงก์")
+    Input(Travel, {
+        key = "JoinLink",
+        title = "ลิงก์เซิร์ฟ / เกม",
+        desc = "วางลิงก์แล้วกด Enter  •  รองรับลิงก์เกม, gameInstanceId, share link",
+        placeholder = "https://www.roblox.com/games/...",
+    })
+
+    local function parseLink(link)
+        link = tostring(link or "")
+        local info = { raw = link }
+        info.placeId = tonumber(link:match("placeId=(%d+)")) or tonumber(link:match("/games/(%d+)")) or tonumber(link:match("/experiences/(%d+)"))
+        info.jobId = link:match("gameInstanceId=([%w%-]+)") or link:match("jobId=([%w%-]+)")
+        info.vip = link:match("privateServerLinkCode=([%w_%-]+)") or link:match("linkCode=([%w_%-]+)")
+        info.share = link:match("share%?code=([%w]+)")
+        return info
+    end
+
+    Button(Travel, {
+        title = "เข้าด้วยลิงก์",
+        desc = "JobId → เข้าเซิร์ฟตรง  •  ลิงก์ส่วนตัว/share → เปิดผ่านเบราว์เซอร์",
+        text = "เข้า",
+        callback = function()
+            local info = parseLink(Config.JoinLink)
+            if info.raw == "" then
+                Toast("ยังไม่ได้วางลิงก์", false)
+                return
+            end
+            if info.jobId then
+                local pid = info.placeId or game.PlaceId
+                local ok, err = pcall(function()
+                    TeleportService:TeleportToPlaceInstance(pid, info.jobId, LocalPlayer)
+                end)
+                Toast(ok and "กำลังเข้าเซิร์ฟตาม JobId" or ("เข้าไม่ได้: " .. tostring(err)), ok)
+            elseif info.vip or info.share then
+                -- ลิงก์เซิร์ฟส่วนตัว/share ต้องผ่านระบบ login ของ Roblox: สคริปต์ resolve เป็น JobId เองไม่ได้
+                local opened = pcall(function()
+                    GuiService:OpenBrowserWindow(info.raw)
+                end)
+                if setclipboard then
+                    pcall(setclipboard, info.raw)
+                end
+                Toast(opened and "เปิดลิงก์ในเบราว์เซอร์แล้ว (คัดลอกให้ด้วย)" or "คัดลอกลิงก์แล้ว เปิดในเบราว์เซอร์เอง", opened)
+            elseif info.placeId then
+                local ok, err = pcall(function()
+                    TeleportService:Teleport(info.placeId, LocalPlayer)
+                end)
+                Toast(ok and ("กำลังวาร์ปไป Place " .. info.placeId) or ("วาร์ปไม่ได้: " .. tostring(err)), ok)
+            else
+                Toast("อ่านลิงก์ไม่ออก", false)
+            end
+        end,
+    })
+
+    ------------------------------------------------------------------
+    -- STATUS REFRESH
+    ------------------------------------------------------------------
+    local function timersLine()
+        local dur = ShopCfg.RestockDuration
+        local left = dur - (os.time() % dur)
+        local s = string.format("ร้านรีสต็อก %02d:%02d", math.floor(left / 60), left % 60)
+        local t = loadNext()
+        local now = os.time()
+        local soon
+        for _, ts in pairs(t) do
+            if type(ts) == "number" and ts > now and (not soon or ts < soon) then
+                soon = ts
+            end
+        end
+        if soon then
+            local d = soon - now
+            s = s .. string.format("  |  Challenge %dh%02dm", math.floor(d / 3600), math.floor((d % 3600) / 60))
+        end
+        return s
+    end
+
+    local function refreshInfo()
+        MoneyStatus.Set(
+            "ok",
+            string.format("Coins %s  Gems %s  HW %s", fmt(attr("Coins")), fmt(attr("Gems")), fmt(attr(H_KEY)))
+        )
+        TimerStatus.Set("ok", timersLine())
+    end
+
+    ------------------------------------------------------------------
+    -- LOBBY: ซื้อของ + ลงด่าน
+    ------------------------------------------------------------------
+    local shopNeed = {}
+    local shopTried = false
+
+    local function shopRetryReady()
+        if not Config.StateShopMissing then
+            return false
+        end
+        if not shopTried then
+            return true
+        end
+        for _, cur in ipairs({ "Coins", "Gems" }) do
+            local need = shopNeed[cur]
+            if need and attr(cur) >= need then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function buyShop()
+        local cycle = currentCycle()
+        local bought, missing = 0, false
+        shopNeed = {}
+        setStatus("กำลังซื้อของร้านค้า (ยืนรอใน Lobby)...")
+        for _, cur in ipairs({ "Coins", "Gems" }) do
+            local want = shopWantedIds(cur)
+            local bal = attr(cur)
+            for _, it in ipairs(shopList(cur)) do
+                if want[it.ID] then
+                    local left = it.MaxStock
+                    while left > 0 do
+                        if not alive() then
+                            return bought
+                        end
+                        local n = math.min(left, math.floor(bal / it.Price))
+                        if n < 1 then
+                            missing = true
+                            shopNeed[cur] = math.min(shopNeed[cur] or math.huge, it.Price)
+                            break
+                        end
+                        local done = false
+                        while n >= 1 do
+                            local ok, res = pcall(function()
+                                return Remotes.BuyItem:InvokeServer(it.ID, n, cur)
+                            end)
+                            if ok and res then
+                                done = true
+                                break
+                            end
+                            n = math.floor(n / 2)
+                            task.wait(0.15)
+                        end
+                        if not done then
+                            break
+                        end
+                        bought += n
+                        left -= n
+                        bal -= n * it.Price
+                        setStatus(string.format("ซื้อ %s x%d (%s) รวม %d ชิ้น", it.ID, n, cur, bought))
+                        task.wait(0.2)
+                    end
+                end
+            end
+        end
+        SetConfig("StateShopCycle", cycle)
+        SetConfig("StateShopMissing", missing)
+        shopTried = true
+        setStatus(
+            missing and string.format("ซื้อของ %d ชิ้น (เงินไม่พอบางรายการ ไปลงด่านต่อ)", bought)
+                or string.format("ซื้อของเสร็จ %d ชิ้น", bought),
+            "ok"
+        )
+        return bought
+    end
+
+    local function halloweenPicked()
+        local set = pickSet(Config.HalloweenPick)
+        local out = {}
+        for _, label in ipairs(HAL_LABELS) do
+            if set[label] then
+                out[#out + 1] = HAL_BY_LABEL[label]
+            end
+        end
+        return out
+    end
+
+    local function halloweenWanted()
+        return Config.AutoHalloweenShop and #halloweenPicked() > 0
+    end
+
+    local function buyHalloween()
+        local picked = halloweenPicked()
+        if #picked == 0 then
+            Toast("ยังไม่ได้เลือกของฮาโลวีน", false)
+            return 0
+        end
+        local bal = attr(H_KEY)
+        local bought = 0
+        setStatus("กำลังแลกของร้านฮาโลวีน...")
+        for _, it in ipairs(picked) do
+            local left = it.MaxStock
+            while left > 0 do
+                if not alive() then
+                    return bought
+                end
+                local n = math.min(left, math.floor(bal / it.Price))
+                if n < 1 then
+                    break
+                end
+                local done = false
+                while n >= 1 do
+                    local ok, res = pcall(function()
+                        return Remotes.BuyHalloweenEventItem:InvokeServer(it.ID, n)
+                    end)
+                    if ok and res then
+                        done = true
+                        break
+                    end
+                    n = math.floor(n / 2) -- สต็อกเหลือน้อยกว่าที่ขอ: ลดจำนวนแล้วลองใหม่
+                    task.wait(0.15)
+                end
+                if not done then
+                    break
+                end
+                bought += n
+                left -= n
+                bal -= n * it.Price
+                setStatus(string.format("แลก %s x%d  (รวม %d ชิ้น)", it.ID, n, bought))
+                task.wait(0.2)
+            end
+        end
+        SetConfig("StateHalBal", math.floor(attr(H_KEY)))
+        setStatus(string.format("แลกของฮาโลวีนเสร็จ %d ชิ้น", bought), "ok")
+        return bought
+    end
+
+    local function launch(activity, name, stage, rewards, difficulty, mapKey, mode)
+        SetConfig("StateActivity", activity)
+        SaveConfig(true)
+        pcall(function()
+            Remotes.RequestJoinLobby:InvokeServer("Create")
+        end)
+        task.wait(0.6)
+        Remotes.UpdateLobbySettings:FireServer(name, stage, rewards, difficulty, mapKey, mode)
+        task.wait(0.8)
+        Remotes.TeleportRequest:FireServer(MATCH_TP_ID, mode, mapKey, stage, difficulty)
+        for _ = 1, 35 do
+            if not alive() then
+                return false
+            end
+            task.wait(1)
+        end
+        SetConfig("StateActivity", "")
+        return false
+    end
+
+    local function tryChallenge()
+        local ok, data = pcall(function()
+            return Remotes.GetChallengeData:InvokeServer()
+        end)
+        if not ok or type(data) ~= "table" then
+            return false
+        end
+        local tabs = {}
+        for name, v in pairs(data) do
+            if type(v) == "table" and v.MapToCreate and (Config.ChallengeTab == "All" or Config.ChallengeTab == name) then
+                tabs[#tabs + 1] = name
+            end
+        end
+        table.sort(tabs)
+        for _, tab in ipairs(tabs) do
+            local nextT = loadNext()
+            if (nextT[tab] or 0) <= os.time() then
+                local c = data[tab]
+                local rewards = { Items = {} }
+                for _, r in ipairs(c.Rewards or {}) do
+                    if r.Id == "Coins" then
+                        rewards.Coins = r.Amount
+                    elseif r.Id == "Gems" then
+                        rewards.Gems = r.Amount
+                    else
+                        table.insert(rewards.Items, { Id = r.Id, Count = r.Amount, Chance = 100 })
+                    end
+                end
+                setStatus(string.format("ลง %s Challenge (%s stage %s)", tab, tostring(c.MapName), tostring(c.StageName)))
+                launch("challenge", tab .. " Challenge", c.StageName, rewards, "Nightmare", c.MapToCreate, tab .. "Challenge")
+                nextT = loadNext()
+                nextT[tab] = os.time() + math.max(60, tonumber(c.TimeLeft) or 3600) + 5
+                saveNext(nextT)
+            end
+        end
+        return false
+    end
+
+    local function launchEvent()
+        local e = eventEntry()
+        if not e then
+            return false
+        end
+        setStatus("ลง Event: " .. tostring(e.name))
+        return launch("event", e.name, 1, stageRewards(e.key, 1), Config.EventDifficulty, e.key, e.mode)
+    end
+
+    local function launchFarm()
+        local m = farmEntry()
+        if not m then
+            return false
+        end
+        local act = math.clamp(tonumber(tostring(Config.FarmAct):match("%d+")) or 1, 1, m.stages)
+        setStatus(string.format("ลง %s Act %d (%s)", m.name, act, Config.FarmDifficulty))
+        return launch("farm", m.name, act, stageRewards(m.key, act), Config.FarmDifficulty, m.key, m.mode)
+    end
+
+    doChallengeNow = function()
+        if not IN_LOBBY then
+            Toast("ใช้ได้เฉพาะตอนอยู่ใน Lobby", false)
+            return
+        end
+        saveNext({})
+        tryChallenge()
+    end
+    doShopNow = function()
+        if not IN_LOBBY then
+            Toast("ใช้ได้เฉพาะตอนอยู่ใน Lobby", false)
+            return
+        end
+        buyShop()
+    end
+    doHalloweenNow = function()
+        if not IN_LOBBY then
+            Toast("ใช้ได้เฉพาะตอนอยู่ใน Lobby", false)
+            return
+        end
+        buyHalloween()
+    end
+
+    local function lobbyMain()
+        SetConfig("StateActivity", "")
+        local t0 = os.clock()
+        while LocalPlayer:GetAttribute("Coins") == nil and os.clock() - t0 < 25 do
+            task.wait(0.5)
+        end
+        task.wait(2)
+
+        while alive() do
+            -- 1) ร้านค้าปกติ
+            if shopWanted() and (currentCycle() ~= Config.StateShopCycle or shopRetryReady()) then
+                buyShop()
+            end
+            -- 2) ร้านฮาโลวีน: แลกเมื่อเหรียญเพิ่มจากครั้งล่าสุด
+            if halloweenWanted() and attr(H_KEY) > Config.StateHalBal then
+                buyHalloween()
+            end
+            -- 3) Challenge ก่อนเสมอ แล้วค่อย Event หรือ ฟาร์มด่าน
+            if Config.AutoChallenge then
+                tryChallenge()
+            end
+            if not alive() then
+                return
+            end
+            if Config.AutoEvent then
+                launchEvent()
+            elseif Config.AutoFarm then
+                launchFarm()
+            end
+
+            setStatus("ไม่มีงานให้ลงตอนนี้ (รอ 30 วิ แล้วเช็กใหม่)", "idle")
+            for _ = 1, 30 do
+                if not alive() then
+                    return
+                end
+                task.wait(1)
+            end
+        end
+    end
+
+    ------------------------------------------------------------------
+    -- MATCH
+    ------------------------------------------------------------------
+    local leaving = false
+
+    local function leaveToLobby(why, teleportFirst)
+        if leaving then
+            return
+        end
+        leaving = true
+        setStatus(why .. " -> กำลังกลับ Lobby")
+        task.spawn(function()
+            for i = 1, 20 do
+                if not alive() then
+                    return
+                end
+                local useTeleport = (i % 2 == 1) == (teleportFirst == true)
+                pcall(function()
+                    if useTeleport then
+                        TeleportService:Teleport(LOBBY_PLACE_ID, LocalPlayer)
+                    else
+                        GameEvents.LeaveGameRequest:FireServer()
+                    end
+                end)
+                task.wait(6)
+            end
+            leaving = false
+        end)
+    end
+
+    local function shouldLeave()
+        if Config.AutoChallenge then
+            local due, tab = challengeDue()
+            if due then
+                return "Challenge (" .. tostring(tab) .. ") พร้อมแล้ว"
+            end
+        end
+        if shopWanted() and Config.ShopLeaveToBuy and currentCycle() ~= Config.StateShopCycle then
+            return "ร้านค้ารีสต็อกแล้ว"
+        end
+        if halloweenWanted() and Config.HalloweenLeaveAt > 0 and attr(H_KEY) - Config.StateHalBal >= Config.HalloweenLeaveAt then
+            return "Halloween Coin ถึงเป้าแล้ว"
+        end
+        return nil
+    end
+
+    local function matchMain()
+        local act = Config.StateActivity
+        local farming = (act == "farm" or act == "event")
+        setStatus("อยู่ในแมตช์: " .. (act ~= "" and act or "manual"))
+
+        GameEvents.EndGameEvent.OnClientEvent:Connect(function()
+            if not farming and Config.AutoLeaveChallenge then
+                task.delay(Config.LeaveDelay, function()
+                    leaveToLobby("จบแมตช์", false)
+                end)
+            end
+        end)
+
+        if farming then
+            task.spawn(function()
+                task.wait(10)
+                while alive() do
+                    if not leaving then
+                        local why = shouldLeave()
+                        if why then
+                            leaveToLobby(why, true)
+                        end
+                    end
+                    task.wait(5)
+                end
+            end)
+        end
+    end
+
+    ------------------------------------------------------------------
+    -- START
+    ------------------------------------------------------------------
+    task.defer(function()
+        task.spawn(function()
+            while alive() do
+                refreshInfo()
+                task.wait(1)
+            end
+        end)
+        if IN_LOBBY then
+            task.spawn(lobbyMain)
+        else
+            task.spawn(matchMain)
+        end
+    end)
+end)()
+
+
+--==================================================
+-- DISCORD WEBHOOK  (ส่งสรุปเมื่อจบด่าน)
+-- ลิงก์ webhook เก็บใน Config เท่านั้น ไม่อยู่ในโค้ด และไม่ถูก Export / บันทึกลงสล็อต
+--==================================================
+;(function()
+    local RS = game:GetService("ReplicatedStorage")
+    local LOBBY_PLACE_ID = 117949143041402
+    local IN_LOBBY = (game.PlaceId == LOBBY_PLACE_ID)
+
+    -- ตัวเลือก "ส่งอะไรบ้าง" (ข้อความต้องตรงกับ Defaults.WebhookWhat)
+    local OPT = {
+        result = "ผลแมตช์ (ชนะ/แพ้)",
+        stage = "ด่านและความยาก",
+        units = "Unit ที่ได้",
+        items = "ไอเท็มที่ได้",
+        money = "Coins / Gems ที่ได้",
+        player = "ชื่อผู้เล่น",
+        raw = "ข้อมูลดิบ (ไว้ดีบัก)",
+        team = "Unit ในทีม (เลเวล / EXP)",
+    }
+    local OPT_LIST = { OPT.result, OPT.stage, OPT.team, OPT.units, OPT.items, OPT.money, OPT.player, OPT.raw }
+    local MONEY_KEYS = { "Coins", "Gems", "HalloweenCoin" }
+    local MONEY_SET = { Coins = true, Gems = true, HalloweenCoin = true }
+
+    ------------------------------------------------------------------
+    -- HELPERS
+    ------------------------------------------------------------------
+    local function lower(s)
+        return string.lower(tostring(s))
+    end
+
+    -- ตัดข้อความโดยไม่ตัดกลางตัวอักษร UTF-8
+    local function clip(s, n)
+        s = tostring(s)
+        if #s <= n then
+            return s
+        end
+        local cut = n - 3
+        while cut > 0 do
+            local b = string.byte(s, cut + 1)
+            if b == nil or b < 128 or b >= 192 then
+                break
+            end
+            cut = cut - 1
+        end
+        return string.sub(s, 1, cut) .. "..."
+    end
+
+    local function cutPoint(s, n)
+        local cut = n
+        while cut > 0 do
+            local b = string.byte(s, cut + 1)
+            if b == nil or b < 128 or b >= 192 then
+                break
+            end
+            cut = cut - 1
+        end
+        return cut
+    end
+
+    local function commas(n)
+        local s = tostring(math.floor(tonumber(n) or 0))
+        while true do
+            local r, k = s:gsub("^(-?%d+)(%d%d%d)", "%1,%2")
+            s = r
+            if k == 0 then
+                break
+            end
+        end
+        return s
+    end
+
+    local function attr(name)
+        return tonumber(LocalPlayer:GetAttribute(name)) or 0
+    end
+
+    local function moneyNow()
+        local t = {}
+        for _, k in ipairs(MONEY_KEYS) do
+            t[k] = attr(k)
+        end
+        return t
+    end
+
+    local function selected()
+        local set = {}
+        for _, v in ipairs(Split(Config.WebhookWhat)) do
+            set[v] = true
+        end
+        return set
+    end
+
+    local function cleanUrl()
+        return (tostring(Config.WebhookUrl or ""):gsub("%s+", ""))
+    end
+
+    local function validUrl(u)
+        return u:match("^https://[%w%.]*discord%.com/api/webhooks/%d+/[%w_%-]+") ~= nil
+            or u:match("^https://[%w%.]*discordapp%.com/api/webhooks/%d+/[%w_%-]+") ~= nil
+    end
+
+    ------------------------------------------------------------------
+    -- ส่ง HTTP (ใช้ request ของ executor ส่งตรงเข้า Discord ได้)
+    ------------------------------------------------------------------
+    local function httpRequest(opts)
+        local req = (syn and syn.request) or request or http_request or (http and http.request)
+        if type(req) ~= "function" then
+            return false, "executor นี้ไม่รองรับ request"
+        end
+        local ok, res = pcall(req, opts)
+        if not ok then
+            return false, tostring(res)
+        end
+        local code = type(res) == "table" and (res.StatusCode or res.status_code) or nil
+        if code and code >= 200 and code < 300 then
+            return true, code
+        end
+        return false, "HTTP " .. tostring(code)
+    end
+
+    local function post(embed)
+        local url = cleanUrl()
+        if not validUrl(url) then
+            return false, "ลิงก์ webhook ไม่ถูกต้อง"
+        end
+        local ok, body = pcall(function()
+            return HttpService:JSONEncode({
+                username = "Sakura Hub",
+                allowed_mentions = { parse = {} }, -- กัน @everyone / @here
+                embeds = { embed },
+            })
+        end)
+        if not ok then
+            return false, "สร้างข้อความไม่สำเร็จ"
+        end
+        return httpRequest({
+            Url = url,
+            Method = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body = body,
+        })
+    end
+
+    ------------------------------------------------------------------
+    -- แปลงข้อมูลที่เกมส่งมาตอนจบแมตช์ (ไม่รู้โครงสร้างแน่ชัด จึงไล่อ่านแบบกว้างๆ)
+    ------------------------------------------------------------------
+    local function ser(v, d, seen)
+        local t = typeof(v)
+        if t == "table" then
+            if v.ModelName ~= nil then
+                return "<unit " .. tostring(v.UnitName or v.ModelName) .. ">"
+            end
+            if d >= 5 or seen[v] then
+                return "{...}"
+            end
+            seen[v] = true
+            local parts, n = {}, 0
+            for k, x in pairs(v) do
+                n = n + 1
+                if n > 40 then
+                    parts[#parts + 1] = "..."
+                    break
+                end
+                parts[#parts + 1] = tostring(k) .. "=" .. ser(x, d + 1, seen)
+            end
+            seen[v] = nil
+            return "{" .. table.concat(parts, ", ") .. "}"
+        elseif t == "string" then
+            return '"' .. v .. '"'
+        elseif t == "Instance" then
+            return "<" .. v.ClassName .. ":" .. v.Name .. ">"
+        end
+        return tostring(v)
+    end
+
+    -- ดักทุก RemoteEvent ไว้ดูว่า "ของที่ดรอป" มากับ event ไหน (ทำงานเมื่อเลือกข้อมูลดิบ)
+    local sniffLog, sniffCount = {}, {}
+    local NOISE = {
+        TimerSync = true, WaveCountdownEvent = true, ResetVoteStartUI = true,
+        ResetUnitUIEvent = true, CloseEndGameUIEvent = true,
+    }
+
+    local matchInfo = nil
+    local function noteMap(...)
+        local a = table.pack(...)
+        if type(a[2]) == "string" and type(a[4]) == "string" then
+            matchInfo = { map = a[2], act = a[3], diff = a[4] }
+        end
+    end
+
+    local function cfgDiff()
+        local a = Config.StateActivity
+        if a == "farm" then
+            return Config.FarmDifficulty
+        elseif a == "event" then
+            return Config.EventDifficulty
+        elseif a == "challenge" then
+            return "Nightmare"
+        end
+        return nil
+    end
+
+    local function sniff(name, ...)
+        if NOISE[name] then
+            return
+        end
+        sniffCount[name] = (sniffCount[name] or 0) + 1
+        if sniffCount[name] > 6 then
+            return
+        end
+        local packed = table.pack(...)
+        local ok, s = pcall(ser, packed, 0, {})
+        sniffLog[#sniffLog + 1] = { t = os.clock(), name = name, text = ok and clip(s, 300) or "?" }
+        if #sniffLog > 60 then
+            table.remove(sniffLog, 1)
+        end
+    end
+
+    local STRICT_ID = { "Id", "ID", "id", "UnitName", "UnitId", "ItemName", "ItemId", "Unit" }
+    local AMT_KEYS = { "Count", "Amount", "Quantity", "Qty" }
+
+    local function firstOf(t, keys, want)
+        for _, k in ipairs(keys) do
+            local v = t[k]
+            if type(v) == want then
+                return v
+            end
+        end
+        return nil
+    end
+
+    local function parseRewards(args)
+        local ctx = { seen = {}, agg = {}, order = {}, money = {}, team = {} }
+
+        ctx.groups, ctx.gorder = {}, {}
+        local function add(kind, id, n, path)
+            local gk = string.match(path, "^(.*)/[^/]*$") or ""
+            local g = ctx.groups[gk]
+            if not g then
+                g = { agg = {}, order = {} }
+                ctx.groups[gk] = g
+                ctx.gorder[#ctx.gorder + 1] = gk
+            end
+            local key = kind .. "|" .. id
+            if not g.agg[key] then
+                g.agg[key] = { kind = kind, id = id, n = 0 }
+                g.order[#g.order + 1] = key
+            end
+            g.agg[key].n = g.agg[key].n + n
+        end
+
+        local function kindOf(path)
+            if string.find(lower(path), "unit", 1, true) then
+                return "unit"
+            end
+            return "item"
+        end
+
+        local function walk(v, path, depth)
+            if depth > 7 then
+                return
+            end
+            if type(v) == "table" then
+                if ctx.seen[v] then
+                    return
+                end
+                ctx.seen[v] = true
+                -- Unit ในทีมของเรา (เกมส่งมาพร้อมเลเวล/EXP) ไม่ใช่ของที่ดรอป
+                if v.ModelName ~= nil or type(v.UnitsData) == "table" then
+                    ctx.team[#ctx.team + 1] = v
+                    return
+                end
+                -- ตารางที่หน้าตาเป็น "ของ 1 ชิ้น": { Id = "...", Count = n }
+                local id = firstOf(v, STRICT_ID, "string")
+                local amt = firstOf(v, AMT_KEYS, "number")
+                if not id and amt then
+                    id = firstOf(v, { "Name", "DisplayName" }, "string")
+                end
+                if id then
+                    local p = path
+                    for _, tk in ipairs({ "Type", "Category", "Kind" }) do
+                        if type(v[tk]) == "string" then
+                            p = p .. "/" .. v[tk]
+                        end
+                    end
+                    local n = amt or 1
+                    if MONEY_SET[id] then
+                        ctx.money[id] = (ctx.money[id] or 0) + n
+                    else
+                        add(kindOf(p), id, n, path)
+                    end
+                    return
+                end
+                for k, x in pairs(v) do
+                    walk(x, path .. "/" .. tostring(k), depth + 1)
+                end
+                return
+            end
+            local key = string.match(path, "([^/]+)$") or ""
+            local parent = string.match(path, "^(.*)/[^/]*$") or ""
+            local lp = lower(parent)
+            local inGroup = string.find(lp, "unit", 1, true) or string.find(lp, "item", 1, true)
+            if type(v) == "number" and MONEY_SET[key] then
+                ctx.money[key] = (ctx.money[key] or 0) + v
+            elseif type(v) == "string" and tonumber(key) and inGroup then
+                add(kindOf(parent), v, 1, path)
+            elseif type(v) == "number" and not tonumber(key) and inGroup then
+                add(kindOf(parent), key, v, path)
+            end
+        end
+
+        walk(args, "args", 0)
+
+        -- รายการเดียวกันที่โผล่ซ้ำหลายที่ในข้อมูล นับครั้งเดียว
+        local seenSig = {}
+        for _, gk in ipairs(ctx.gorder) do
+            local g = ctx.groups[gk]
+            local parts = {}
+            for _, key in ipairs(g.order) do
+                parts[#parts + 1] = key .. "=" .. tostring(g.agg[key].n)
+            end
+            table.sort(parts)
+            local sig = table.concat(parts, ";")
+            if not seenSig[sig] then
+                seenSig[sig] = true
+                for _, key in ipairs(g.order) do
+                    local e = g.agg[key]
+                    if not ctx.agg[key] then
+                        ctx.agg[key] = { kind = e.kind, id = e.id, n = 0 }
+                        ctx.order[#ctx.order + 1] = key
+                    end
+                    ctx.agg[key].n = ctx.agg[key].n + e.n
+                end
+            end
+        end
+        return ctx
+    end
+
+    local WIN_SET = { win = true, won = true, victory = true, success = true, cleared = true, clear = true }
+    local LOSE_SET = { lose = true, lost = true, defeat = true, fail = true, failed = true, gameover = true }
+
+    local function strResult(s)
+        s = (lower(s):gsub("[%s_%-!]", ""))
+        if WIN_SET[s] then
+            return true
+        end
+        if LOSE_SET[s] then
+            return false
+        end
+        return nil
+    end
+
+    local function findResult(v, depth, seen)
+        if type(v) ~= "table" or depth > 6 or seen[v] then
+            return nil
+        end
+        seen[v] = true
+        for k, x in pairs(v) do
+            local ks = type(k) == "string" and lower(k) or ""
+            if type(x) == "boolean" then
+                if ks == "win" or ks == "won" or ks == "victory" or ks == "success" or ks == "iswin" or ks == "isvictory" then
+                    return x
+                end
+            elseif type(x) == "string" then
+                if ks == "result" or ks == "outcome" or ks == "status" or type(k) == "number" then
+                    local r = strResult(x)
+                    if r ~= nil then
+                        return r
+                    end
+                end
+            elseif type(x) == "table" then
+                local r = findResult(x, depth + 1, seen)
+                if r ~= nil then
+                    return r
+                end
+            end
+        end
+        return nil
+    end
+
+    local function stageText()
+        local act = Config.StateActivity
+        if act == "farm" then
+            return string.format(
+                "ฟาร์ม: %s • %s • %s",
+                tostring(Config.FarmTarget), tostring(Config.FarmAct), tostring(Config.FarmDifficulty)
+            )
+        elseif act == "event" then
+            return string.format("Event: %s • %s", tostring(Config.EventPick), tostring(Config.EventDifficulty))
+        elseif act == "challenge" then
+            return "Challenge"
+        end
+        return "เข้าเอง (ไม่ได้ลงด้วยสคริปต์)"
+    end
+
+    ------------------------------------------------------------------
+    -- สร้างข้อความ (embed)
+    ------------------------------------------------------------------
+    local function buildEmbed(args, startMoney, dump)
+        local sel = selected()
+        local ctx = parseRewards(args)
+
+        local won = nil
+        if type(args[1]) == "boolean" then
+            won = args[1] -- ตัวแรกของ EndGameEvent: true = ชนะ
+        end
+        if won == nil then
+            won = findResult(args, 0, {})
+        end
+        if won == nil then
+            for i = 1, (args.n or 0) do
+                if type(args[i]) == "string" then
+                    local r = strResult(args[i])
+                    if r ~= nil then
+                        won = r
+                        break
+                    end
+                end
+            end
+        end
+
+        local fields = {}
+        local function field(name, value, inline)
+            value = tostring(value or "")
+            if value == "" then
+                value = "-"
+            end
+            fields[#fields + 1] = { name = name, value = clip(value, 1000), inline = inline == true }
+        end
+
+        local function listOf(kind)
+            local lines = {}
+            for _, key in ipairs(ctx.order) do
+                local e = ctx.agg[key]
+                if e.kind == kind then
+                    lines[#lines + 1] = "• " .. e.id .. (e.n > 1 and (" x" .. commas(e.n)) or "")
+                end
+            end
+            return lines
+        end
+
+        if sel[OPT.stage] then
+            local mapKey = type(args[2]) == "string" and args[2] or (matchInfo and matchInfo.map)
+            local act = type(args[3]) == "number" and args[3] or (matchInfo and matchInfo.act)
+            local diff = (matchInfo and matchInfo.diff) or cfgDiff()
+            local line = stageText()
+            if mapKey then
+                line = "แมพ: " .. tostring(mapKey)
+                    .. (act and (" • Act " .. tostring(act)) or "")
+                    .. (diff and (" • " .. tostring(diff)) or "")
+            end
+            field("ด่าน", line)
+        end
+        if sel[OPT.team] then
+            local lines = {}
+            for _, u in ipairs(ctx.team) do
+                local line = string.format("• %s Lv.%s", tostring(u.UnitName or u.ModelName or "?"), tostring(u.Level or "?"))
+                if type(u.GainedExp) == "number" and u.GainedExp > 0 then
+                    line = line .. " (+" .. commas(u.GainedExp) .. " EXP)"
+                end
+                if u.IsShiny == true then
+                    line = line .. " ✨"
+                end
+                local tr = type(u.UnitsData) == "table" and u.UnitsData.Trait or nil
+                if type(tr) == "string" and tr ~= "None" then
+                    line = line .. " [" .. tr .. "]"
+                end
+                lines[#lines + 1] = line
+            end
+            field("Unit ในทีม", #lines > 0 and table.concat(lines, "\n") or "ไม่พบข้อมูล Unit ในทีม")
+        end
+        if sel[OPT.units] then
+            local l = listOf("unit")
+            field("Unit ที่ได้", #l > 0 and table.concat(l, "\n") or "ไม่พบ Unit ในข้อมูลที่เกมส่งมา")
+        end
+        if sel[OPT.items] then
+            local l = listOf("item")
+            field("ไอเท็มที่ได้", #l > 0 and table.concat(l, "\n") or "ไม่พบไอเท็ม")
+        end
+        if sel[OPT.money] then
+            local lines = {}
+            local cur = moneyNow()
+            for _, k in ipairs(MONEY_KEYS) do
+                local d = startMoney and (cur[k] - (startMoney[k] or 0)) or 0
+                if d <= 0 and ctx.money[k] then
+                    d = ctx.money[k]
+                end
+                if d > 0 then
+                    lines[#lines + 1] = string.format("%s +%s", k, commas(d))
+                end
+            end
+            field("เงิน / เหรียญ", #lines > 0 and table.concat(lines, "\n") or "ไม่มีการเปลี่ยนแปลง", true)
+        end
+        if sel[OPT.raw] then
+            local dd = dump or ""
+            local cp = cutPoint(dd, 900)
+            field("ข้อมูลดิบ (EndGameEvent) 1/2", "```\n" .. string.sub(dd, 1, cp) .. "\n```")
+            if #dd > cp then
+                field("ข้อมูลดิบ (EndGameEvent) 2/2", "```\n" .. clip(string.sub(dd, cp + 1), 900) .. "\n```")
+            end
+            local now = os.clock()
+            local evLines = {}
+            for _, e in ipairs(sniffLog) do
+                if now - e.t <= 25 and e.name ~= "EndGameEvent" then
+                    evLines[#evLines + 1] = e.name .. ": " .. e.text
+                end
+            end
+            if #evLines > 0 then
+                field("Event อื่นช่วงจบด่าน", "```\n" .. clip(table.concat(evLines, "\n"), 950) .. "\n```")
+            end
+        end
+
+        local title, color = "จบด่าน", 0xF4A0B5
+        if sel[OPT.result] then
+            if won == true then
+                title, color = "จบด่าน — ชนะ ✅", 0x57F287
+            elseif won == false then
+                title, color = "จบด่าน — แพ้ ❌", 0xED4245
+            else
+                title = "จบด่าน (ไม่ทราบผล)"
+            end
+        end
+
+        local embed = {
+            title = title,
+            color = color,
+            fields = fields,
+            footer = { text = "Sakura Hub • " .. os.date("%H:%M:%S") },
+        }
+        if sel[OPT.player] then
+            embed.author = { name = LocalPlayer.DisplayName .. " (@" .. LocalPlayer.Name .. ")" }
+        end
+        return embed
+    end
+
+    ------------------------------------------------------------------
+    -- ดักตอนจบแมตช์
+    ------------------------------------------------------------------
+    local startMoney = nil
+    local lastSent = nil
+
+    local function onEnd(...)
+        if not Config.WebhookEnabled then
+            return
+        end
+        if lastSent and os.clock() - lastSent < 15 then
+            return
+        end
+        lastSent = os.clock()
+        local args = table.pack(...)
+        -- รอให้เงินเข้าก่อน แต่ต้องส่งก่อนสคริปต์จะพากลับ Lobby
+        local act = Config.StateActivity
+        local d = 6
+        if act ~= "farm" and act ~= "event" and Config.AutoLeaveChallenge then
+            d = math.clamp((tonumber(Config.LeaveDelay) or 3) - 0.5, 0.5, 14)
+        end
+        task.spawn(function()
+            task.wait(d)
+            local dump = ser(args, 0, {})
+            local ok, embed = pcall(buildEmbed, args, startMoney, dump)
+            if not ok then
+                Toast("Webhook: สร้างรายงานไม่สำเร็จ", false)
+                return
+            end
+            local sent, why = post(embed)
+            if not sent then
+                Toast("ส่ง Webhook ไม่สำเร็จ: " .. tostring(why), false)
+            end
+        end)
+    end
+
+    if not IN_LOBBY then
+        task.spawn(function()
+            local t0 = os.clock()
+            while LocalPlayer:GetAttribute("Coins") == nil and os.clock() - t0 < 25 do
+                task.wait(0.5)
+            end
+            startMoney = moneyNow()
+        end)
+        task.spawn(function()
+            local ge = RS:WaitForChild("GameEvents", 20)
+            local ev = ge and ge:WaitForChild("EndGameEvent", 20)
+            if ev then
+                local env = (getgenv and getgenv()) or _G
+                if env.SakuraWebhookConn then
+                    pcall(function()
+                        env.SakuraWebhookConn:Disconnect()
+                    end)
+                end
+                env.SakuraWebhookConn = ev.OnClientEvent:Connect(onEnd)
+            end
+        end)
+        task.spawn(function()
+            local t0 = os.clock()
+            local r = nil
+            while not r and os.clock() - t0 < 30 do
+                local f = RS:FindFirstChild("MapLoadedComplete", true)
+                if f and f:IsA("RemoteEvent") then
+                    r = f
+                else
+                    task.wait(1)
+                end
+            end
+            if r then
+                r.OnClientEvent:Connect(noteMap)
+            end
+        end)
+        if selected()[OPT.raw] then
+            task.spawn(function()
+                for _, folderName in ipairs({ "GameEvents", "Remotes" }) do
+                    local folder = RS:WaitForChild(folderName, 20)
+                    if folder then
+                        for _, r in ipairs(folder:GetDescendants()) do
+                            if r:IsA("RemoteEvent") then
+                                pcall(function()
+                                    r.OnClientEvent:Connect(function(...)
+                                        sniff(r.Name, ...)
+                                    end)
+                                end)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end
+
+    ------------------------------------------------------------------
+    -- PAGE
+    ------------------------------------------------------------------
+    local Hook = MakePage("Webhook", "Discord Webhook", "ส่งสรุปเข้าดิสเมื่อจบด่าน")
+
+    Section(Hook, "ตั้งค่า")
+    local hookToggle = Toggle(Hook, {
+        key = "WebhookEnabled",
+        title = "ส่ง Webhook เมื่อจบด่าน",
+        desc = "ส่งสรุปรางวัลเข้าดิสทุกครั้งที่จบแมตช์",
+    })
+    ActiveCountGetters[#ActiveCountGetters + 1] = hookToggle.Get
+    Input(Hook, {
+        key = "WebhookUrl",
+        title = "ลิงก์ Webhook",
+        desc = "วางแล้วกด Enter  •  ไม่ถูก Export",
+        placeholder = "https://discord.com/api/webhooks/...",
+    })
+
+    Section(Hook, "เลือกข้อมูลที่ส่ง")
+    Dropdown(Hook, {
+        key = "WebhookWhat",
+        title = "ข้อมูลในข้อความ",
+        desc = "เลือกได้หลายอย่าง",
+        multi = true,
+        options = OPT_LIST,
+    })
+
+    Section(Hook, "ทดสอบ")
+    Button(Hook, {
+        title = "ส่งข้อความทดสอบ",
+        desc = "เช็กว่าลิงก์ใช้ได้",
+        text = "ทดสอบ",
+        callback = function()
+            if not validUrl(cleanUrl()) then
+                Toast("ลิงก์ webhook ไม่ถูกต้อง", false)
+                return
+            end
+            local okSend, why = post({
+                title = "ทดสอบ Webhook ✅",
+                description = "เชื่อมต่อสำเร็จ — Sakura Hub",
+                color = 0xF4A0B5,
+                footer = { text = "Sakura Hub • " .. os.date("%H:%M:%S") },
+            })
+            Toast(okSend and "ส่งข้อความทดสอบแล้ว" or ("ส่งไม่สำเร็จ: " .. tostring(why)), okSend)
+        end,
+    })
+    Button(Hook, {
+        title = "ส่งตัวอย่างรายงานจบด่าน",
+        desc = "ข้อมูลจำลอง ดูหน้าตาข้อความตามที่เลือกไว้",
+        text = "ตัวอย่าง",
+        callback = function()
+            if not validUrl(cleanUrl()) then
+                Toast("ลิงก์ webhook ไม่ถูกต้อง", false)
+                return
+            end
+            local fake = table.pack({
+                Win = true,
+                Rewards = {
+                    Coins = 500,
+                    Items = { { Id = "Rare Shard", Count = 2 } },
+                    Units = { { Id = "ตัวอย่าง Unit A" } },
+                },
+            })
+            local ok, embed = pcall(buildEmbed, fake, nil, ser(fake, 0, {}))
+            if not ok then
+                Toast("สร้างตัวอย่างไม่สำเร็จ", false)
+                return
+            end
+            local okSend, why = post(embed)
+            Toast(okSend and "ส่งตัวอย่างแล้ว" or ("ส่งไม่สำเร็จ: " .. tostring(why)), okSend)
+        end,
+    })
+end)()
+
+
+--==================================================
+-- APPEARANCE  (ธีม + พื้นหลังขยับ + ภาพของคุณ)
+--==================================================
+local Look = MakePage("Look", "ธีมและพื้นหลัง", "ปรับหน้าตา • เปลี่ยนแล้วเห็นผลทันที")
+
+Section(Look, "ธีมสำเร็จรูป")
+ThemeGrid(Look)
+
+Section(Look, "พื้นหลังขยับ")
+
+local function ApplyBackground()
+    RefreshBackgroundImages()
+    RefreshPetalCount()
+    QueueTheme()
+end
+
+Toggle(Look, {
+    key = "AnimBackground",
+    title = "พื้นหลังขยับ",
+    desc = "กลีบซากุระร่วง แสงลอย และประกายระยิบ",
+    callback = function()
+        ApplyBackground()
+    end,
+})
+
+Slider(Look, {
+    key = "PetalCount",
+    title = "จำนวนกลีบซากุระ",
+    desc = "ลดลงถ้าเครื่องหน่วง",
+    min = 0,
+    max = MAX_PETALS,
+    step = 1,
+    callback = function()
+        RefreshPetalCount()
+    end,
+})
+
+Slider(Look, {
+    key = "AnimSpeed",
+    title = "ความเร็วแอนิเมชัน",
+    desc = "ความเร็วกลีบที่ร่วง",
+    min = 30,
+    max = 200,
+    step = 10,
+    suffix = "%",
+})
+
+Slider(Look, {
+    key = "PanelAlpha",
+    title = "ความโปร่งใสของการ์ด",
+    desc = "เพิ่มเพื่อให้เห็นพื้นหลังชัดขึ้น",
+    min = 0,
+    max = 60,
+    step = 2,
+    suffix = "%",
+    callback = function()
+        QueueTheme()
+    end,
+})
+
+Section(Look, "ภาพของคุณ (Roblox Asset ID)")
+
+Input(Look, {
+    key = "BgImageId",
+    title = "ภาพพื้นหลัง",
+    desc = "ใส่เลข ID หรือ rbxassetid://...",
+    placeholder = "เช่น 1234567890",
+    callback = function()
+        RefreshBackgroundImages()
+    end,
+})
+
+Input(Look, {
+    key = "ArtImageId",
+    title = "รูปตัวละคร (มุมขวาล่าง)",
+    desc = "ควรเป็น PNG พื้นหลังโปร่งใส",
+    placeholder = "เช่น 1234567890",
+    callback = function()
+        RefreshBackgroundImages()
+    end,
+})
+
+Slider(Look, {
+    key = "ArtOpacity",
+    title = "ความชัดของรูปตัวละคร",
+    desc = "100% = เห็นชัดเต็มที่",
+    min = 10,
+    max = 100,
+    step = 5,
+    suffix = "%",
+    callback = function()
+        RefreshBackgroundImages()
+    end,
+})
+
+Section(Look, "สี UI")
+ColorRow(Look, "สีหลัก (Accent)", "UIAccentColor")
+ColorRow(Look, "สีรอง (ชมพู / ไล่เฉด)", "UIAccent2Color")
+ColorRow(Look, "สีพื้นหลัง", "UIBackgroundColor")
+ColorRow(Look, "สีปุ่ม", "UIButtonColor")
+
+--==================================================
+-- CONFIG  (ระบบ + สล็อตเซฟ + Export / Import)
+--==================================================
+local Settings = MakePage("Settings", "ตั้งค่า", "ระบบ • คอนฟิก • สล็อตเซฟ")
+
+Section(Settings, "ระบบ")
+
+Toggle(Settings, {
+    key = "SoundEnabled",
+    title = "เสียงเปิด / ปิด",
+    desc = "เล่นเสียงสั้นๆ ตอนกดสวิตช์",
+})
+
+Toggle(Settings, {
+    key = "StatsVisible",
+    title = "แสดง FPS / MS",
+    desc = "กล่องเล็กลากย้ายตำแหน่งได้",
+    callback = function(v)
+        StatsGui.Enabled = v
+    end,
+})
+
+Slider(Settings, {
+    key = "UIScalePercent",
+    title = "ขนาดหน้าต่าง",
+    desc = "ปรับเพิ่มจากขนาดอัตโนมัติตามหน้าจอ",
+    min = 60,
+    max = 120,
+    step = 5,
+    suffix = "%",
+    callback = function()
+        ApplyScale(true)
+    end,
+})
+
+Keybind(Settings, {
+    key = "ToggleKey",
+    title = "ปุ่มลัดเปิด / ปิด UI",
+    desc = "กดปุ่มนี้เพื่อซ่อน/แสดงหน้าต่าง",
+})
+
+Section(Settings, "คอนฟิก")
+
+local CfgCard = Panel(Settings, UDim2.new(1, 0, 0, 66))
+Register(CfgCard)
+local CfgTitle = Text(CfgCard, "บันทึกอัตโนมัติ", 14, FNT.B, "Text")
+CfgTitle.Position = UDim2.fromOffset(20, 12)
+CfgTitle.Size = UDim2.new(1, -160, 0, 20)
+local CfgDesc = Text(
+    CfgCard,
+    writefile and CONFIG_FILE or "executor นี้ไม่รองรับการเขียนไฟล์",
+    11,
+    FNT.R,
+    "Muted"
+)
+CfgDesc.Position = UDim2.fromOffset(20, 34)
+CfgDesc.Size = UDim2.new(1, -160, 0, 18)
+local CfgPill = StatusPill(CfgCard, 122)
+CfgPill.AnchorPoint = Vector2.new(1, 0.5)
+CfgPill.Position = UDim2.new(1, -16, 0.5, 0)
+
+Section(Settings, "สล็อตเซฟ")
+
+local SlotNames = { "Slot 1", "Slot 2", "Slot 3", "Slot 4", "Slot 5" }
+local SlotStatus
+
+local function SlotPath(name)
+    return PROFILE_DIR .. "/" .. string.gsub(name, "%s+", "") .. ".json"
+end
+
+local function SlotExists(name)
+    if not (isfile and readfile) then
+        return false
+    end
+    local ok, e = pcall(isfile, SlotPath(name))
+    return ok and e == true
+end
+
+local function RefreshSlotStatus()
+    if not SlotStatus then
+        return
+    end
+    if not writefile then
+        SlotStatus.Set("bad", "ไม่รองรับ")
+    elseif SlotExists(Config.ProfileSlot) then
+        SlotStatus.Set("ok", "มีข้อมูล")
+    else
+        SlotStatus.Set("idle", "ว่าง")
+    end
+end
+
+local function SnapshotConfig()
+    local data = {}
+    for k, v in pairs(Config) do
+        if Defaults[k] ~= nil and not ProfileExclude[k] then
+            data[k] = v
+        end
+    end
+    return data
+end
+
+local ApplyAll
+
+local function ApplySnapshot(data)
+    local n = 0
+    for k, v in pairs(Defaults) do
+        if not ProfileExclude[k] and type(data[k]) == type(v) then
+            Config[k] = data[k]
+            n = n + 1
+        end
+    end
+    ApplyAll()
+    return n
+end
+
+Dropdown(Settings, {
+    key = "ProfileSlot",
+    title = "เลือกสล็อต",
+    desc = "เก็บคอนฟิกแยกได้ 5 ชุด",
+    options = SlotNames,
+    callback = function()
+        RefreshSlotStatus()
+    end,
+})
+
+SlotStatus = StatusRow(Settings, {
+    title = "สถานะสล็อต",
+    desc = "ดูว่าสล็อตที่เลือกมีข้อมูลหรือยัง",
+    state = "idle",
+    label = "ว่าง",
+})
+
+Button(Settings, {
+    title = "บันทึกลงสล็อต",
+    desc = "เซฟค่าปัจจุบันทั้งหมดลงสล็อตที่เลือก",
+    text = "บันทึก",
+    callback = function()
+        if not writefile then
+            Toast("executor ไม่รองรับการเขียนไฟล์", false)
+            return
+        end
+        local ok = pcall(function()
+            if makefolder and isfolder and not isfolder(PROFILE_DIR) then
+                makefolder(PROFILE_DIR)
+            end
+            writefile(SlotPath(Config.ProfileSlot), HttpService:JSONEncode(SnapshotConfig()))
+        end)
+        Toast(ok and ("บันทึกลง " .. Config.ProfileSlot .. " แล้ว") or "บันทึกไม่สำเร็จ", ok)
+        RefreshSlotStatus()
+    end,
+})
+
+Button(Settings, {
+    title = "โหลดจากสล็อต",
+    desc = "นำค่าจากสล็อตที่เลือกมาใช้ทันที",
+    text = "โหลด",
+    callback = function()
+        if not SlotExists(Config.ProfileSlot) then
+            Toast("สล็อตนี้ยังว่างอยู่", false)
+            return
+        end
+        local ok, n = pcall(function()
+            return ApplySnapshot(HttpService:JSONDecode(readfile(SlotPath(Config.ProfileSlot))))
+        end)
+        Toast(ok and ("โหลด " .. Config.ProfileSlot .. " แล้ว (" .. tostring(n) .. " ค่า)") or "ไฟล์เสียหาย", ok)
+    end,
+})
+
+Button(Settings, {
+    title = "ลบสล็อต",
+    desc = "ลบข้อมูลในสล็อตที่เลือก",
+    text = "ลบ",
+    danger = true,
+    callback = function()
+        if not SlotExists(Config.ProfileSlot) then
+            Toast("สล็อตนี้ว่างอยู่แล้ว", false)
+            return
+        end
+        local ok = pcall(function()
+            if delfile then
+                delfile(SlotPath(Config.ProfileSlot))
+            else
+                writefile(SlotPath(Config.ProfileSlot), "{}")
+            end
+        end)
+        Toast(ok and "ลบสล็อตแล้ว" or "ลบไม่สำเร็จ", ok)
+        RefreshSlotStatus()
+    end,
+})
+
+Section(Settings, "Export / Import")
+
+Button(Settings, {
+    title = "คัดลอกคอนฟิก (Export)",
+    desc = "คัดลอกเป็นข้อความ JSON ไปแชร์เพื่อน",
+    text = "คัดลอก",
+    callback = function()
+        local copy = (type(setclipboard) == "function" and setclipboard)
+            or (type(toclipboard) == "function" and toclipboard)
+        if not copy then
+            Toast("executor ไม่รองรับคลิปบอร์ด", false)
+            return
+        end
+        local ok = pcall(copy, HttpService:JSONEncode(SnapshotConfig()))
+        Toast(ok and "คัดลอกคอนฟิกแล้ว" or "คัดลอกไม่สำเร็จ", ok)
+    end,
+})
+
+Input(Settings, {
+    key = "ImportText",
+    title = "วางคอนฟิก (Import)",
+    desc = "วางข้อความ JSON แล้วกดปุ่มด้านล่าง",
+    placeholder = "{ ... }",
+})
+
+Button(Settings, {
+    title = "นำเข้าคอนฟิก",
+    desc = "ใช้ค่าจากข้อความที่วางไว้",
+    text = "นำเข้า",
+    callback = function()
+        local ok, n = pcall(function()
+            return ApplySnapshot(HttpService:JSONDecode(Config.ImportText))
+        end)
+        if ok and n and n > 0 then
+            SetConfig("ImportText", "")
+            Toast("นำเข้า " .. n .. " ค่าแล้ว", true)
+        else
+            Toast("ข้อความ JSON ไม่ถูกต้อง", false)
+        end
+    end,
+})
+
+local FloatApplyPosition
+local ResetRow = Panel(Settings, UDim2.new(1, 0, 0, 52), "TextButton")
+HoverRow(ResetRow)
+Register(ResetRow)
+local ResetLabel = Text(ResetRow, "รีเซ็ตการตั้งค่าทั้งหมด", 13, FNT.B, Theme.Bad)
+OnTheme(function()
+    ResetLabel.TextColor3 = Theme.Bad
+end)
+ResetLabel.Position = UDim2.fromOffset(20, 0)
+ResetLabel.Size = UDim2.new(1, -40, 1, 0)
+
+local resetArmed = false
+ResetRow.MouseButton1Click:Connect(function()
+    if not resetArmed then
+        resetArmed = true
+        ResetLabel.Text = "กดอีกครั้งเพื่อยืนยันการรีเซ็ต"
+        task.delay(3, function()
+            resetArmed = false
+            ResetLabel.Text = "รีเซ็ตการตั้งค่าทั้งหมด"
+        end)
+        return
+    end
+    resetArmed = false
+    ResetLabel.Text = "รีเซ็ตการตั้งค่าทั้งหมด"
+    for k, v in pairs(Defaults) do
+        Config[k] = v
+    end
+    Collapsed = {}
+    for _, secs in pairs(SectionsByPage) do
+        for _, sec in ipairs(secs) do
+            sec.collapsed = false
+            sec.refresh(true)
+        end
+    end
+    ApplyAll()
+    Tween(Main, 0.3, { Position = UDim2.fromScale(Config.WindowX, Config.WindowY) }, Enum.EasingStyle.Quint)
+    if FloatApplyPosition then
+        FloatApplyPosition()
+    end
+    StatsBox.Position = UDim2.fromScale(Config.StatsX, Config.StatsY)
+    SelectTab(Config.LastTab)
+    SaveConfig(true)
+    Toast("รีเซ็ตการตั้งค่าแล้ว")
+end)
+
+-- ใช้ค่า Config ปัจจุบันกับทุกส่วนของ UI (ใช้ตอนโหลดสล็อต / import / reset)
+ApplyAll = function()
+    ApplyTheme()
+    for _, fn in ipairs(ColorRefreshers) do
+        pcall(fn)
+    end
+    for _, fn in ipairs(Refreshers) do
+        pcall(fn)
+    end
+    RefreshBackgroundImages()
+    RefreshPetalCount()
+    StatsGui.Enabled = Config.StatsVisible
+    ApplyScale(true)
+    SaveConfig()
+end
+
+--==================================================
+-- SIDEBAR CATEGORIES
+--==================================================
+CatGroup("เมนูหลัก")
+Category("หน้าหลัก", "Home", "grid")
+Category("ฟังก์ชัน", "Functions", "sliders")
+Category("ฟาร์มด่าน", "Farm", "grid")
+Category("อีเว้นท์ฮาโลวีน", "Event", "dots")
+Category("ร้านค้า", "Shop", "sliders")
+Category("วาร์ป / ลิงก์", "Travel", "ring")
+Category("Webhook", "Webhook", "save")
+CatGroup("ปรับแต่ง")
+Category("ธีมและพื้นหลัง", "Look", "dots")
+Category("ตั้งค่า", "Settings", "ring")
+
+--==================================================
+-- FLOATING FLOWER BUTTON  (ปุ่มลอยรูปดอกซากุระ ลากได้)
+--==================================================
+local ToggleGui = New("ScreenGui", {
+    Name = "SAKURA_Floating",
+    ResetOnSpawn = false,
+    DisplayOrder = 999999,
+    IgnoreGuiInset = true,
+}, GuiParent)
+
+local Float = New("Frame", {
+    Size = UDim2.fromOffset(54, 54),
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(Config.FloatX, Config.FloatY),
+    BackgroundTransparency = 1,
+    Active = true,
+}, ToggleGui)
+
+local Glow = New("Frame", {
+    Size = UDim2.new(1, 10, 1, 10),
+    Position = UDim2.fromScale(0.5, 0.5),
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    BackgroundTransparency = 1,
+}, Float)
+Corner(Glow, 999)
+local GlowStroke = Stroke(Glow, Theme.Accent2, 3, 0.2)
+OnTheme(function()
+    GlowStroke.Color = Theme.Accent2
+end)
+TweenService:Create(
+    GlowStroke,
+    TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+    { Transparency = 0.7 }
+):Play()
+
+local FloatBtn = New("TextButton", {
+    Size = UDim2.fromScale(1, 1),
+    Text = "",
+    BorderSizePixel = 0,
+    AutoButtonColor = false,
+    Active = true,
+    BackgroundColor3 = Color3.new(1, 1, 1),
+}, Float)
+Corner(FloatBtn, 999)
+AccentGrad(FloatBtn, 45)
+Stroke(FloatBtn, Color3.new(1, 1, 1), 2, 0.2)
+local FloatFlower = Flower(FloatBtn, 38)
+FloatFlower.Active = false
+TweenService:Create(
+    FloatFlower,
+    TweenInfo.new(10, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, -1),
+    { Rotation = 360 }
+):Play()
+
+FloatApplyPosition = function()
+    Float.Position = UDim2.fromScale(Config.FloatX, Config.FloatY)
+end
+
+MakeDraggable(FloatBtn, Float, "FloatX", "FloatY", function()
+    SetWindow(not Config.WindowVisible)
+end)
+
+--==================================================
+-- START
+--==================================================
+SelectTab(Config.LastTab)
+RefreshBackgroundImages()
+RefreshPetalCount()
+RefreshStats()
+RefreshHome()
+UpdateSummary()
+RefreshSlotStatus()
+
+if Config.WindowVisible then
+    PlayOpen()
+end
+
+if not LoadedFromFile then
+    SaveConfig(true) -- สร้างไฟล์ Config ครั้งแรก
+end
+
+print("[SAKURA] UI Loaded" .. (LoadedFromFile and " (Config loaded)" or " (new Config)"))
